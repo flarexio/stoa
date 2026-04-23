@@ -1,134 +1,251 @@
 # Stoa Architecture
 
-Stoa follows **Clean Architecture** principles, prioritizing the separation of concerns and ensuring that business logic remains independent of external frameworks and infrastructure.
+Stoa follows **Clean Architecture** and organizes code **by feature**. The goal is not to build a general agent framework. The goal is to make every agent loop explicit, typed, validated, and easy to inspect.
+
+The central rule is simple:
+
+```text
+Infrastructure -> Interface Adapters -> Use Cases -> Domain
+```
+
+Dependencies point inward. The LLM SDK, database client, filesystem, shell, browser, and external APIs are infrastructure. Domain models must never import them.
 
 ## Core Principles
-1. **Inward Dependencies**: Dependencies only point toward the inner layers (Domain).
-2. **Independent of Frameworks**: The core logic doesn't depend on LLM SDKs or databases.
-3. **Feature-Based Organization**: Code is grouped by business feature rather than technical layer.
+
+1. **Domain is the conscience.** Domain code owns entities, invariants, and validators.
+2. **Use cases own the loop.** The agent cycle, retry policy, routing, and orchestration live in use case code.
+3. **Adapters translate.** Prompt rendering, output parsing, provider calls, and serialization live outside the use case boundary.
+4. **Infrastructure executes.** Concrete SDKs, tools, databases, and operating-system calls are implementation details.
+5. **Contracts are typed.** Agents exchange intents, observations, errors, and handoffs as Go types, not free-form text.
 
 ## Strategic Architecture View
 
-The following diagram illustrates how Stoa balances **Clean Architecture** (the concentric circles) with **Feature-based Organization** (the vertical slices).
+Stoa combines Clean Architecture's inward dependency rule with Go's preference for feature-based packages.
 
 ```mermaid
 graph LR
-    %% Definition of Layers
-    subgraph Infrastructure_Layer ["Infrastructure (Outer - Tools & SDKs)"]
-        direction TB
-        SDK[LLM Providers]
-        DB[(PostgreSQL/File)]
-        OS[Terminal/OS]
+    subgraph Infrastructure ["Infrastructure: SDKs, Tools, Storage"]
+        Provider["LLM Provider SDK"]
+        DB["Database / File System"]
+        Tool["Shell / HTTP / Browser / APIs"]
     end
 
-    subgraph Adapter_Layer ["Adapters (Translation)"]
-        direction TB
-        LLM[LLM Engines]
-        Prompts[Prompt Templates]
-        Parsers[Output Parsers]
+    subgraph Adapters ["Interface Adapters: Translation"]
+        LLMAdapter["Reasoning Engine Adapter"]
+        Prompt["Prompt Renderer"]
+        Parser["Structured Output Parser"]
+        ExecutorAdapter["Executor Adapter"]
     end
 
-    subgraph UseCase_Layer ["Use Cases (The Loop)"]
-        direction TB
-        Logic[Explicit Agent Loop]
-        Orch[Handoff Logic]
+    subgraph UseCases ["Use Cases: Agent Loop"]
+        Loop["Explicit Reason/Validate/Execute Loop"]
+        Ports["Ports Defined As Interfaces"]
+        Routing["Handoff Routing Policy"]
     end
 
-    subgraph Domain_Layer ["Domain (The Conscience)"]
-        direction TB
-        Entity[Pure Intent Structs]
-        Rules[Explicit Validators]
+    subgraph Domain ["Domain: Business Judgment"]
+        Intent["Intent Types"]
+        Rules["Validators and Invariants"]
+        HandoffContract["Handoff Contracts"]
     end
 
-    %% Dependency Flow (Inward)
-    Infrastructure_Layer -.-> Adapter_Layer
-    Adapter_Layer -.-> UseCase_Layer
-    UseCase_Layer -.-> Domain_Layer
+    Infrastructure --> Adapters
+    Adapters --> UseCases
+    UseCases --> Domain
 
-    style Domain_Layer fill:#f96,stroke:#333,stroke-width:4px
+    style Domain fill:#f8b26a,stroke:#333,stroke-width:3px
 ```
 
-## Implementation Pattern (The Feature Slice)
+## Feature Slice Layout
 
-In Stoa, a "Feature" is a self-contained Go package. We avoid global registries or complex middleware chains.
-
-```mermaid
-graph TD
-    subgraph Feature_Package ["package: order_agent"]
-        D[domain.go - Pure Structs & Validation]
-        U[usecase.go - The Explicit Loop Logic]
-        A[adapter.go - Implementation of Interfaces]
-    end
-
-    subgraph Shared
-        H[harness/ - Shared Validators & Retries]
-        L[llm/ - Engine Interfaces]
-    end
-
-    U --> D
-    U --> L
-    A --> U
-    U -.-> H
-```
-
-## The Explicit Loop (Data Flow)
-
-This is the heartbeat of a Stoa Agent. It's not a framework hidden in a library, but an explicit `for` loop in the Use Case.
-
-```mermaid
-sequenceDiagram
-    participant UC as Use Case (The Loop)
-    participant LLM as Adapter (Reasoning Engine)
-    participant DOM as Domain (Validator)
-    participant INF as Infrastructure (Executor)
-
-    Note over UC: User starts task
-    loop Reasoning Cycle
-        UC->>LLM: Predict(Task + History, out: Intent)
-        LLM-->>UC: Return Structured Intent
-        
-        UC->>DOM: Intent.Validate()
-        
-        alt Valid
-            UC->>INF: Execute(Intent)
-            INF-->>UC: Success
-            Note over UC: Break Loop
-        else Invalid
-            Note right of DOM: The Conscience says NO
-            DOM-->>UC: Return Detailed Error
-            UC->>UC: Append Error to History (Self-Correction)
-        end
-    end
-    UC-->>UC: Final Result
-```
-
-## Why this is "Better":
-1.  **Framework-Free**: We use standard Go patterns. No `init()` magic, no reflection-heavy registries.
-2.  **Explicit Errors**: Validation errors are treated as **First-Class Inputs** for the LLM.
-3.  **Traceable**: Since the loop is in the Use Case, you can easily log every single "thought" and "correction" without digging through middleware layers.
-
-## Layers Description
-
-| Layer | Responsibility | Content |
-| :--- | :--- | :--- |
-| **Domain** | The heart of the application. Contains pure business logic. | Structs, Invariants, Validators. |
-| **Use Cases** | Coordinates the flow of data to and from the domain. | Agent loop logic, Task sequences. |
-| **Adapters** | Translates data between the internal and external world. | LLM client implementations, Prompt formatting. |
-| **Infrastructure** | Concrete implementations of external tools. | SDK calls, DB queries, File system. |
-
-## Feature-based Layout
-Unlike traditional Clean Architecture implementations that use top-level layer folders, Stoa organizes code by feature:
+A feature is a self-contained Go package. It contains the domain types, use case flow, adapters, and tests needed for one agent or one agent capability.
 
 ```text
 stoa/
-├── <feature_name>/
-│   ├── domain.go      # Entities & Rules
-│   ├── usecase.go     # Task Flow
-│   ├── adapter.go     # LLM / DB Implementation
-│   └── *_test.go
-├── harness/           # Cross-cutting concerns (Validation, Retry)
-└── llm/               # Shared LLM abstractions
+  <feature_name>/
+    domain.go       # Intent structs, handoff contracts, validation rules
+    usecase.go      # The explicit agent loop and orchestration policy
+    ports.go        # Interfaces required by the use case
+    adapter.go      # Adapter implementations for prompts, parsers, tools, SDKs
+    *_test.go
+  harness/
+    validator/      # Shared validation helpers and LLM feedback formatting
+    retry/          # Retry and circuit-breaker mechanics
+    handoff/        # Shared handoff helpers, if a contract crosses features
+  llm/              # Shared reasoning engine interfaces
+  tools/            # Shared tool definitions
+  cmd/              # Executable entry points
+  testdata/         # Golden sets and evaluation fixtures
+  docs/
 ```
 
----
-**Discussion Point**: In this architecture, where should we place the "Handoff" logic between agents? Should it be a shared Domain entity or a specific Use Case service?
+Feature-based organization does not mean dependency rules disappear. A feature may keep related files together, but the direction still flows inward through interfaces.
+
+## The Stoa Cycle
+
+Every agent follows the same cycle:
+
+1. **Reason with evidence.** The LLM explains which supplied facts support its proposed intent.
+2. **Emit structured intent.** The model outputs a typed intent, not an action.
+3. **Validate in domain code.** Pure Go rules decide whether the intent is allowed.
+4. **Execute through a port.** Use cases call an interface; infrastructure implements it.
+5. **Feed back observations or errors.** Validation and execution results become typed context for the next cycle.
+
+```mermaid
+sequenceDiagram
+    participant UC as Use Case
+    participant RE as Reasoning Engine Port
+    participant DOM as Domain Validator
+    participant EX as Executor Port
+    participant AD as Adapter / Infrastructure
+
+    Note over UC: Start task with typed context
+    loop Reasoning Cycle
+        UC->>RE: Predict(Task, Events) -> ReasoningResult[Intent]
+        RE-->>UC: Evidence + Rationale + Intent
+        UC->>DOM: Validate(Intent)
+
+        alt Valid intent
+            UC->>EX: Execute(Intent)
+            EX->>AD: Translate and call concrete tool
+            AD-->>EX: Observation or execution error
+            EX-->>UC: Observation or execution error
+        else Invalid intent
+            DOM-->>UC: Validation error
+        end
+
+        UC->>UC: Append typed event for the next cycle
+    end
+```
+
+The important boundary is that the use case depends on `ReasoningEngine` and `Executor` interfaces, not on concrete SDKs or tool clients.
+
+## Ports, Not Infrastructure Dependencies
+
+Use cases define the capabilities they need as narrow interfaces. Adapters implement those interfaces using infrastructure.
+
+```go
+type ReasoningEngine[TIntent any] interface {
+	Predict(ctx context.Context, input ReasoningInput) (ReasoningResult[TIntent], error)
+}
+
+type Executor[TIntent any] interface {
+	Execute(ctx context.Context, intent TIntent) (Observation, error)
+}
+```
+
+The domain does not know these interfaces exist unless they represent pure business concepts. Domain code should normally expose structs and validation methods only.
+
+```go
+type Intent struct {
+	Symbol string
+	Amount int
+}
+
+func (i Intent) Validate() error {
+	if i.Symbol == "" {
+		return errors.New("symbol is required")
+	}
+	if i.Amount <= 0 {
+		return errors.New("amount must be positive")
+	}
+	return nil
+}
+```
+
+## Reasoning Result Contract
+
+"Reasoning with evidence" should be part of the contract, not just a prompt instruction.
+
+```go
+type ReasoningResult[TIntent any] struct {
+	Evidence  []EvidenceRef
+	Rationale string
+	Intent    TIntent
+}
+
+type EvidenceRef struct {
+	Source string
+	Fact   string
+}
+```
+
+`Rationale` should be concise and auditable. It is not a place to depend on hidden chain-of-thought. The contract should capture what a validator, test, or human reviewer can inspect.
+
+## Cycle Events
+
+Agent memory inside a loop should not be a raw `[]string`. Validation failures, execution failures, observations, and model outputs have different meanings.
+
+```go
+type CycleEvent struct {
+	Role    EventRole
+	Kind    EventKind
+	Content string
+}
+
+const (
+	EventModelOutput     EventKind = "model_output"
+	EventValidationError EventKind = "validation_error"
+	EventExecutionError  EventKind = "execution_error"
+	EventObservation     EventKind = "observation"
+)
+```
+
+Typed events make self-correction more reliable because the next reasoning step can distinguish "the model said this" from "the environment rejected this."
+
+## Handoff Decision
+
+Handoff has three responsibilities, and they belong in different layers:
+
+| Responsibility | Layer | Why |
+| --- | --- | --- |
+| Handoff data contract | Domain or shared `harness/handoff` | It is the typed boundary between agents. |
+| Handoff routing policy | Use case | Deciding when and where to hand off is orchestration. |
+| Handoff serialization or transport | Adapter / Infrastructure | JSON, queues, HTTP, files, and SDK calls are external details. |
+
+Do not turn handoff into a global framework or registry unless repeated features prove the need. Start with explicit typed contracts and small routing functions.
+
+## Harness Responsibilities
+
+`harness/` contains reusable mechanics, not business judgment.
+
+Good harness responsibilities:
+
+- Formatting validation errors for LLM feedback.
+- Retry loops with bounded attempts.
+- Circuit breakers and timeouts.
+- Common event recording helpers.
+- Shared handoff utilities when multiple features need the same envelope.
+
+Bad harness responsibilities:
+
+- Owning feature-specific business rules.
+- Knowing concrete provider SDKs.
+- Deciding which business intent is valid.
+- Hiding the agent loop behind opaque middleware.
+
+The rule of thumb is: **domain owns rules; harness owns mechanics**.
+
+## Testing Expectations
+
+Each feature should test the contract at multiple levels:
+
+- Domain validator tests for business invariants.
+- Use case loop tests with fake reasoning engines and fake executors.
+- Adapter tests for prompt rendering, structured parsing, and infrastructure error mapping.
+- Golden tests for representative reasoning cycles and correction behavior.
+
+Validation and execution errors should be tested as first-class inputs, not only as failure cases.
+
+## What This Architecture Prevents
+
+This architecture is designed to prevent common agent failures:
+
+- Domain models importing LLM SDKs or tool clients.
+- Prompts becoming the only source of business rules.
+- Free-form text handoffs between agents.
+- Blind retries without new feedback.
+- Framework-style magic hiding the actual loop.
+- Provider-specific code leaking into use cases.
+
+Stoa should stay small enough to read, but strict enough that invalid actions cannot slip through just because the model sounded confident.

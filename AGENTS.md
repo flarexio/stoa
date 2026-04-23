@@ -24,6 +24,7 @@ Dependencies flow inward. Code is organized **by feature**.
 - **Prompts hold judgment; code holds contracts.** If a rule can be a validator, it must not be only a prompt instruction.
 - **Agents communicate through typed handoff objects**, never free-form text.
 - **Errors feed context back to the LLM** for self-correction rather than blind retries.
+- **Provider adapters only translate.** Prompt rendering and output decoding must be replaceable strategies; domain validation never lives in an LLM adapter.
 
 ## The Stoa Pattern (Intent-Validator-Execution)
 To ensure "Knowing and Doing are One", every agent must follow this cycle:
@@ -38,3 +39,9 @@ To ensure "Knowing and Doing are One", every agent must follow this cycle:
 - **No heavy frameworks** (LangChain, LangGraph). Keep the agent loop short and understood.
 - **Go-first**: Type system as contract, implicit interfaces, and high performance.
 - **Harness engineering**: Validation, retry with context, and circuit breakers are mandatory.
+
+## Current LLM Contract
+- `llm.ReasoningEngine[TIntent]` returns `llm.ReasoningResult[TIntent]` with evidence, rationale, and typed intent.
+- `llm.PromptRenderer` converts typed reasoning input into provider-neutral messages.
+- `llm.Decoder[TIntent]` converts raw model output into typed reasoning results. JSON is only the default decoder, not an architecture requirement.
+- OpenAI code under `llm/openai` must stay provider-specific: SDK calls, message translation, response-format selection, and provider error wrapping only.
