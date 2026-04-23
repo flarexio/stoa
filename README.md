@@ -91,9 +91,9 @@ Stoa follows **Clean Architecture** — dependencies flow inward. The LLM, frame
 
 | Layer | Responsibility | Examples |
 |-------|---------------|----------|
-| **Domain** | Pure entities, rules, validators | `Survey`, `Quote`, business invariants |
-| **Use Case** | Agent task flows, decision logic | "Complete survey", "Generate quote" |
-| **Adapter** | Translate between domain and infrastructure | `LLMReasoningEngine`, prompt templates |
+| **Domain** | Pure entities, rules, validators | Business entities and invariants |
+| **Use Case** | Agent task flows, decision logic | Orchestration logic |
+| **Adapter** | Translate between domain and infrastructure | LLM adapters, prompt templates |
 | **Infrastructure** | Concrete SDKs, DBs, external tools | LLM Provider SDK, PostgreSQL |
 
 See [`docs/architecture.md`](docs/architecture.md) for the full breakdown.
@@ -106,14 +106,6 @@ Stoa organizes code **by feature**, not by architectural layer. Each agent lives
 
 ```
 stoa/
-├── survey/                # Survey agent: everything it needs
-│   ├── model.go           #   domain types & invariants
-│   ├── agent.go           #   use case / task flow
-│   ├── prompt.go          #   prompt templates
-│   ├── llm.go             #   LLM adapter (implements Reasoner)
-│   └── *_test.go
-├── quote/                 # Quote agent
-├── connection/            # Connection-test agent
 ├── harness/               # Cross-agent reusable components
 │   ├── validator/
 │   ├── retry/
@@ -127,6 +119,8 @@ stoa/
     ├── philosophy.md
     └── decisions/         # Architecture Decision Records (ADRs)
 ```
+
+Agent packages are added per-agent as development progresses. Each follows the same shape: `model.go` for domain types & invariants, `agent.go` for the use case / task flow, `prompt.go` for prompt templates, `llm.go` for the LLM adapter, and `*_test.go` alongside.
 
 ### Why feature-based, not layer-based
 
@@ -150,24 +144,6 @@ git clone https://github.com/flarexio/stoa.git
 cd stoa
 go mod download
 ```
-
-### Run the example agent
-
-```bash
-go run ./cmd/survey-agent
-```
-
----
-
-## The first inhabitants: IIoT pre-deployment agents
-
-Stoa's first agent collection handles Industrial IoT pre-deployment workflows:
-
-- **Survey Agent** — on-site investigation, requirements gathering, equipment inventory
-- **Quote Agent** — pricing based on survey results and business rules
-- **Connection Agent** — real-world connectivity testing against quoted commitments
-
-These three agents coordinate through typed handoff contracts — no free-form message passing, no conversation history dumps. Each handoff is a structured document that defines exactly what the next agent needs.
 
 ---
 

@@ -1,0 +1,31 @@
+# AI Agents Development Guide (AGENTS.md)
+
+This file is the single source of truth for all AI agents (Gemini CLI, Claude Code, OpenAI, etc.) working on this repository.
+
+## Project Overview
+Stoa is a Go workshop for building production-grade AI agents. It is not a framework -- it is an architecture and set of patterns for crafting agents that act and verify, not just reason.
+The name comes from the Greek στοά (covered colonnade), connecting Stoic philosophy (control what you can) with Wang Yangming's 知行合一 (unity of knowing and doing).
+
+## Build and Test Commands
+```bash
+go build ./...          # build all packages
+go test ./...           # run all tests
+```
+
+## Architecture (Clean Architecture)
+Dependencies flow inward. Code is organized **by feature**.
+1. **Infrastructure**: LLM SDKs, databases, external services.
+2. **Interface Adapters**: LLM adapters, prompt templates, output parsers.
+3. **Use Cases**: Agent task flows, orchestration (defines interfaces).
+4. **Domain**: Pure business entities, rules, validators (no external dependencies).
+
+## Critical Rules
+- **LLM is infrastructure, not domain.** Business logic never imports an SDK.
+- **Prompts hold judgment; code holds contracts.** If a rule can be a validator, it must not be only a prompt instruction.
+- **Agents communicate through typed handoff objects**, never free-form text.
+- **Errors feed context back to the LLM** for self-correction rather than blind retries.
+
+## Design Decisions
+- **No heavy frameworks** (LangChain, LangGraph). Keep the agent loop short and understood.
+- **Go-first**: Type system as contract, implicit interfaces, and high performance.
+- **Harness engineering**: Validation, retry with context, and circuit breakers are mandatory.
