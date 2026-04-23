@@ -57,3 +57,10 @@ Early development. The project is following a phased approach:
 3. Clean Architecture implementation per agent (starting with Survey)
 4. Golden set testing (5-10 real cases per agent)
 5. Agent collaboration
+
+## Response
+- Lead with result, no preamble, no summary
+- After tool use, report outcome only — never narrate the process
+- Don't explain what you're doing unless asked
+- Code and data: full precision, no truncation. Compress natural language only
+- When uncertain, ask to clarify — don't guess

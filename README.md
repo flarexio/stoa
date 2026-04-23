@@ -71,16 +71,16 @@ Stoa follows **Clean Architecture** — dependencies flow inward. The LLM, frame
 
 ```
 ┌─────────────────────────────────────────────────────┐
-│  Framework / Infrastructure                          │
-│  (Anthropic SDK, databases, external services)       │
+│  Framework / Infrastructure                         │
+│  (LLM Provider, databases, external services)       │
 │  ┌───────────────────────────────────────────────┐  │
-│  │  Interface Adapters                            │  │
+│  │  Interface Adapters                           │  │
 │  │  (LLM adapters, prompt templates, parsers)    │  │
 │  │  ┌─────────────────────────────────────────┐  │  │
-│  │  │  Use Cases                               │  │  │
-│  │  │  (Agent task flows, orchestration)       │  │  │
+│  │  │  Use Cases                              │  │  │
+│  │  │  (Agent task flows, orchestration)      │  │  │
 │  │  │  ┌───────────────────────────────────┐  │  │  │
-│  │  │  │  Domain                            │  │  │  │
+│  │  │  │  Domain                           │  │  │  │
 │  │  │  │  (Pure business models & rules)   │  │  │  │
 │  │  │  └───────────────────────────────────┘  │  │  │
 │  │  └─────────────────────────────────────────┘  │  │
@@ -94,7 +94,7 @@ Stoa follows **Clean Architecture** — dependencies flow inward. The LLM, frame
 | **Domain** | Pure entities, rules, validators | `Survey`, `Quote`, business invariants |
 | **Use Case** | Agent task flows, decision logic | "Complete survey", "Generate quote" |
 | **Adapter** | Translate between domain and infrastructure | `LLMReasoningEngine`, prompt templates |
-| **Infrastructure** | Concrete SDKs, DBs, external tools | Anthropic Go SDK, PostgreSQL |
+| **Infrastructure** | Concrete SDKs, DBs, external tools | LLM Provider SDK, PostgreSQL |
 
 See [`docs/architecture.md`](docs/architecture.md) for the full breakdown.
 
@@ -141,20 +141,14 @@ Go idiom organizes packages by **what they provide**, not what they contain. A `
 ### Prerequisites
 
 - Go 1.22+
-- Anthropic API key
+- LLM Provider API key or OAuth
 
 ### Install
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/stoa.git
+git clone https://github.com/flarexio/stoa.git
 cd stoa
 go mod download
-```
-
-### Configure
-
-```bash
-export ANTHROPIC_API_KEY=your_key_here
 ```
 
 ### Run the example agent
