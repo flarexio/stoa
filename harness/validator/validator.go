@@ -33,7 +33,7 @@ func FormatForLLM(err error) string {
 	if errors.As(err, &valErr) {
 		return fmt.Sprintf("Validation failed: %s. Please correct this and try again.", valErr.Error())
 	}
-	
+
 	// Handle multiple errors if they are joined
 	return fmt.Sprintf("Validation failed: %v. Please adjust your reasoning.", err)
 }
