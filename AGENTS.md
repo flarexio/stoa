@@ -25,6 +25,15 @@ Dependencies flow inward. Code is organized **by feature**.
 - **Agents communicate through typed handoff objects**, never free-form text.
 - **Errors feed context back to the LLM** for self-correction rather than blind retries.
 
+## The Stoa Pattern (Intent-Validator-Execution)
+To ensure "Knowing and Doing are One", every agent must follow this cycle:
+
+1.  **Reasoning with Evidence**: The agent must output its reasoning based on provided facts before stating an intent.
+2.  **Structured Intent**: The agent outputs a strictly typed `Intent` (not an action).
+3.  **Domain Validation**: The `Intent` is validated against pure Go business rules (The Conscience).
+4.  **Verified Execution**: Only validated intents are executed by Go code.
+5.  **Environment Feedback**: If validation or execution fails, the precise error is fed back as context for the next reasoning cycle.
+
 ## Design Decisions
 - **No heavy frameworks** (LangChain, LangGraph). Keep the agent loop short and understood.
 - **Go-first**: Type system as contract, implicit interfaces, and high performance.
