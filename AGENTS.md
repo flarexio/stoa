@@ -25,6 +25,7 @@ Dependencies flow inward. Code is organized **by feature**.
 - **Agents communicate through typed handoff objects**, never free-form text.
 - **Errors feed context back to the LLM** for self-correction rather than blind retries.
 - **Provider adapters only translate.** Prompt rendering and output decoding must be replaceable strategies; domain validation never lives in an LLM adapter.
+- **Domain and agent are separate packages.** The domain package holds entities, validators, and port interfaces (plus stdlib-only default adapters). The agent package holds the use case loop and feature-specific prompt rendering. The domain package must not import the agent package or any LLM code.
 
 ## The Stoa Pattern (Intent-Validator-Execution)
 To ensure "Knowing and Doing are One", every agent must follow this cycle:

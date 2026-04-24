@@ -58,28 +58,37 @@ graph LR
 
 ## Feature Slice Layout
 
-A feature is a self-contained Go package. It contains the domain types, use case flow, adapters, and tests needed for one agent or one agent capability.
+Each feature spans two Go packages: a domain package and an agent package. The split keeps domain types independently importable so other agents, handoff receivers, or offline batch validators can consume them without pulling any LLM code.
 
 ```text
 stoa/
-  <feature_name>/
-    domain.go       # Intent structs, handoff contracts, validation rules
-    usecase.go      # The explicit agent loop and orchestration policy
-    ports.go        # Interfaces required by the use case
-    adapter.go      # Adapter implementations for prompts, parsers, tools, SDKs
-    *_test.go
+  <domain>/             # Pure domain: entities, validators, port interfaces
+    <domain>.go         # Value types and validators (stdlib-only)
+    <port>.go           # Port interface + its stdlib-only default implementation
+    <domain>_test.go
+  <agent>/              # Use case: the agent loop that operates on <domain>
+    agent.go            # Orchestration (imports <domain>, llm, harness/loop)
+    prompt.go           # Feature-specific PromptRenderer
+    agent_test.go
+    integration_test.go
   harness/
-    validator/      # Shared validation helpers and LLM feedback formatting
-    retry/          # Retry and circuit-breaker mechanics
-    handoff/        # Shared handoff helpers, if a contract crosses features
-  llm/              # Shared reasoning engine interfaces
-  tools/            # Shared tool definitions
-  cmd/              # Executable entry points
-  testdata/         # Golden sets and evaluation fixtures
+    loop/               # Typed reason-validate-execute runner
+    validator/          # Shared validation helpers and LLM feedback formatting
+    retry/              # (reserved) retry and circuit-breaker mechanics
+    handoff/            # (reserved) shared handoff envelopes
+  llm/                  # Reasoning engine and message contracts
+  llm/<provider>/       # Provider adapters (e.g. llm/openai)
+  tools/                # Shared tool definitions
+  cmd/                  # Executable entry points
+  testdata/             # Notes, golden sets, evaluation fixtures
   docs/
 ```
 
-Feature-based organization does not mean dependency rules disappear. A feature may keep related files together, but the direction still flows inward through interfaces.
+Example: `icd/` defines ICD-10 `Note`, `Intent`, `Validator`, and the `Dictionary`/`Recorder` ports with their in-memory defaults. `coder/` is the clinical-coding agent that orchestrates the loop, renders prompts, and wires OpenAI. `icd/` never imports `coder/` or `llm/`.
+
+Port interfaces and their simplest in-process default implementations (in-memory stores, stdlib-only helpers) live in the domain package, in keeping with the Go convention of shipping minimal defaults alongside interfaces (compare `io.Writer` and `io.Discard`). Infrastructure-specific adapters that pull in external SDKs or network dependencies (Postgres, Redis, HTTP) go in sibling subpackages under the domain (`<domain>/postgres/`, `<domain>/redis/`), not in the domain root.
+
+Feature-based organization does not mean dependency rules disappear. The direction still flows inward through interfaces: the agent depends on domain, never the reverse.
 
 ## The Stoa Cycle
 
