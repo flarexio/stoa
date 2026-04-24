@@ -8,14 +8,14 @@ import (
 	"os"
 	"strings"
 
-	openaisdk "github.com/openai/openai-go"
+	"github.com/openai/openai-go"
 	"github.com/openai/openai-go/option"
 	"github.com/openai/openai-go/shared"
 
 	"github.com/flarexio/stoa/llm"
 )
 
-const defaultModel = "gpt-4.1-mini"
+const defaultModel = "gpt-5.4-mini"
 
 type OutputFormat string
 
@@ -37,7 +37,7 @@ type Config[TIntent any] struct {
 
 // Adapter implements llm.ReasoningEngine using the official OpenAI Go SDK.
 type Adapter[TIntent any] struct {
-	client       openaisdk.Client
+	client       openai.Client
 	model        string
 	outputFormat OutputFormat
 	renderer     llm.PromptRenderer
@@ -73,7 +73,7 @@ func NewAdapter[TIntent any](cfg Config[TIntent]) (*Adapter[TIntent], error) {
 	}
 
 	return &Adapter[TIntent]{
-		client:       openaisdk.NewClient(option.WithAPIKey(apiKey)),
+		client:       openai.NewClient(option.WithAPIKey(apiKey)),
 		model:        model,
 		outputFormat: outputFormat,
 		renderer:     renderer,
@@ -91,12 +91,12 @@ func (a *Adapter[TIntent]) Predict(ctx context.Context, input llm.ReasoningInput
 		return result, err
 	}
 
-	params := openaisdk.ChatCompletionNewParams{
+	params := openai.ChatCompletionNewParams{
 		Messages: messages,
-		Model:    openaisdk.ChatModel(a.model),
+		Model:    openai.ChatModel(a.model),
 	}
 	if a.outputFormat == OutputFormatJSONObject {
-		params.ResponseFormat = openaisdk.ChatCompletionNewParamsResponseFormatUnion{
+		params.ResponseFormat = openai.ChatCompletionNewParamsResponseFormatUnion{
 			OfJSONObject: &shared.ResponseFormatJSONObjectParam{
 				Type: "json_object",
 			},
@@ -118,13 +118,13 @@ func (a *Adapter[TIntent]) Predict(ctx context.Context, input llm.ReasoningInput
 	return a.decoder.Decode(content)
 }
 
-func (a *Adapter[TIntent]) messages(input llm.ReasoningInput) ([]openaisdk.ChatCompletionMessageParamUnion, error) {
+func (a *Adapter[TIntent]) messages(input llm.ReasoningInput) ([]openai.ChatCompletionMessageParamUnion, error) {
 	messages, err := a.renderer.Render(input)
 	if err != nil {
 		return nil, fmt.Errorf("render prompt: %w", err)
 	}
 
-	translated := make([]openaisdk.ChatCompletionMessageParamUnion, 0, len(messages))
+	translated := make([]openai.ChatCompletionMessageParamUnion, 0, len(messages))
 	for _, message := range messages {
 		content := strings.TrimSpace(message.Content)
 		if content == "" {
@@ -132,11 +132,11 @@ func (a *Adapter[TIntent]) messages(input llm.ReasoningInput) ([]openaisdk.ChatC
 		}
 		switch message.Role {
 		case llm.MessageRoleSystem:
-			translated = append(translated, openaisdk.SystemMessage(content))
+			translated = append(translated, openai.SystemMessage(content))
 		case llm.MessageRoleAssistant:
-			translated = append(translated, openaisdk.AssistantMessage(content))
+			translated = append(translated, openai.AssistantMessage(content))
 		case llm.MessageRoleUser:
-			translated = append(translated, openaisdk.UserMessage(content))
+			translated = append(translated, openai.UserMessage(content))
 		default:
 			return nil, fmt.Errorf("unsupported message role %q", message.Role)
 		}
