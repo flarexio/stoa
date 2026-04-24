@@ -15,7 +15,7 @@ type testIntent struct {
 func TestNewAdapterRequiresAPIKey(t *testing.T) {
 	t.Setenv("OPENAI_API_KEY", "")
 
-	_, err := NewAdapter[testIntent](Config[testIntent]{})
+	_, err := NewAdapter(Config[testIntent]{})
 	if err == nil {
 		t.Fatal("expected missing API key error")
 	}
@@ -24,7 +24,7 @@ func TestNewAdapterRequiresAPIKey(t *testing.T) {
 func TestNewAdapterDefaultsProviderConfig(t *testing.T) {
 	t.Setenv("OPENAI_API_KEY", "")
 
-	adapter, err := NewAdapter[testIntent](Config[testIntent]{APIKey: "test-key"})
+	adapter, err := NewAdapter(Config[testIntent]{APIKey: "test-key"})
 	if err != nil {
 		t.Fatalf("NewAdapter returned error: %v", err)
 	}
@@ -56,7 +56,7 @@ func TestRenderReasoningInputIncludesContract(t *testing.T) {
 }
 
 func TestMessagesMapEnvironmentFeedbackToUserContext(t *testing.T) {
-	adapter, err := NewAdapter[testIntent](Config[testIntent]{
+	adapter, err := NewAdapter(Config[testIntent]{
 		APIKey:       "test-key",
 		SystemPrompt: "system",
 	})
@@ -99,7 +99,7 @@ func TestMessagesMapEnvironmentFeedbackToUserContext(t *testing.T) {
 func TestCustomRendererAndDecoderDisableDefaultJSONMode(t *testing.T) {
 	t.Setenv("OPENAI_API_KEY", "")
 
-	adapter, err := NewAdapter[testIntent](Config[testIntent]{
+	adapter, err := NewAdapter(Config[testIntent]{
 		APIKey: "test-key",
 		Renderer: llm.PromptRendererFunc(func(input llm.ReasoningInput) ([]llm.Message, error) {
 			return []llm.Message{{Role: llm.MessageRoleUser, Content: input.Task}}, nil
