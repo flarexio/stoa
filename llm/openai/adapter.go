@@ -2,7 +2,6 @@ package openai
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -30,6 +29,7 @@ type Config[TIntent any] struct {
 	APIKey       string
 	Model        string
 	OutputFormat OutputFormat
+	// Deprecated: prompt rendering is provider-neutral. Prefer passing Renderer directly.
 	SystemPrompt string
 	Renderer     llm.PromptRenderer
 	Decoder      llm.Decoder[TIntent]
@@ -60,13 +60,13 @@ func NewAdapter[TIntent any](cfg Config[TIntent]) (*Adapter[TIntent], error) {
 
 	renderer := cfg.Renderer
 	if renderer == nil {
-		renderer = defaultPromptRenderer{systemPrompt: strings.TrimSpace(cfg.SystemPrompt)}
+		renderer = llm.DefaultPromptRenderer{SystemPrompt: strings.TrimSpace(cfg.SystemPrompt)}
 	}
 
 	decoder := cfg.Decoder
 	outputFormat := cfg.OutputFormat
 	if decoder == nil {
-		decoder = JSONDecoder[TIntent]{}
+		decoder = llm.JSONDecoder[TIntent]{}
 		if outputFormat == "" {
 			outputFormat = OutputFormatJSONObject
 		}
@@ -146,72 +146,5 @@ func (a *Adapter[TIntent]) messages(input llm.ReasoningInput) ([]openai.ChatComp
 	}
 	return translated, nil
 }
-
-type defaultPromptRenderer struct {
-	systemPrompt string
-}
-
-func (r defaultPromptRenderer) Render(input llm.ReasoningInput) ([]llm.Message, error) {
-	systemPrompt := strings.TrimSpace(r.systemPrompt)
-	if systemPrompt == "" {
-		systemPrompt = defaultSystemPrompt
-	}
-
-	messages := []llm.Message{
-		{Role: llm.MessageRoleSystem, Content: systemPrompt},
-		{Role: llm.MessageRoleUser, Content: renderReasoningInput(input)},
-	}
-
-	for _, event := range input.Events {
-		content := renderCycleEvent(event)
-		switch event.Role {
-		case llm.EventRoleAssistant:
-			messages = append(messages, llm.Message{Role: llm.MessageRoleAssistant, Content: content})
-		default:
-			// Environment feedback is deliberately sent as user-visible context so
-			// the model treats validation and execution errors as new constraints.
-			messages = append(messages, llm.Message{Role: llm.MessageRoleUser, Content: content})
-		}
-	}
-
-	return messages, nil
-}
-
-type JSONDecoder[TIntent any] struct{}
-
-func (JSONDecoder[TIntent]) Decode(content string) (llm.ReasoningResult[TIntent], error) {
-	var result llm.ReasoningResult[TIntent]
-	content = strings.TrimSpace(content)
-	if err := json.Unmarshal([]byte(content), &result); err != nil {
-		return result, fmt.Errorf("decode reasoning result: %w: %s", err, content)
-	}
-	return result, nil
-}
-
-func renderReasoningInput(input llm.ReasoningInput) string {
-	var b strings.Builder
-	b.WriteString("Task:\n")
-	b.WriteString(strings.TrimSpace(input.Task))
-	if strings.TrimSpace(input.Instructions) != "" {
-		b.WriteString("\n\nFeature instructions:\n")
-		b.WriteString(strings.TrimSpace(input.Instructions))
-	}
-	b.WriteString("\n\nReturn JSON with this exact shape:\n")
-	b.WriteString(`{"evidence":[{"source":"...","fact":"..."}],"rationale":"...","intent":{...}}`)
-	return b.String()
-}
-
-func renderCycleEvent(event llm.CycleEvent) string {
-	return fmt.Sprintf("[%s:%s]\n%s", event.Role, event.Kind, strings.TrimSpace(event.Content))
-}
-
-const defaultSystemPrompt = `You are a Stoa reasoning engine.
-
-You must produce structured JSON only.
-You do not execute actions.
-You propose a typed intent for Go code to validate.
-Use only supplied facts as evidence.
-If validation or execution feedback is present, correct the next intent accordingly.
-The top-level JSON object must contain evidence, rationale, and intent.`
 
 var _ llm.ReasoningEngine[struct{}] = (*Adapter[struct{}])(nil)

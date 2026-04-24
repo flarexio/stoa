@@ -35,7 +35,7 @@ func TestNewAdapterDefaultsProviderConfig(t *testing.T) {
 }
 
 func TestRenderReasoningInputIncludesContract(t *testing.T) {
-	rendered := renderReasoningInput(llm.ReasoningInput{
+	rendered := llm.RenderReasoningInput(llm.ReasoningInput{
 		Task:         "Choose the next step.",
 		Instructions: "Only use validated facts.",
 	})
@@ -58,7 +58,9 @@ func TestRenderReasoningInputIncludesContract(t *testing.T) {
 func TestMessagesMapEnvironmentFeedbackToUserContext(t *testing.T) {
 	adapter, err := NewAdapter(Config[testIntent]{
 		APIKey:       "test-key",
-		SystemPrompt: "system",
+		Renderer: llm.DefaultPromptRenderer{
+			SystemPrompt: "system",
+		},
 	})
 	if err != nil {
 		t.Fatalf("NewAdapter returned error: %v", err)
