@@ -6,12 +6,6 @@ This file is the single source of truth for all AI agents (Gemini CLI, Claude Co
 Stoa is a Go workshop for building production-grade AI agents. It is not a framework -- it is an architecture and set of patterns for crafting agents that act and verify, not just reason.
 The name comes from the Greek στοά (covered colonnade), connecting Stoic philosophy (control what you can) with Wang Yangming's 知行合一 (unity of knowing and doing).
 
-## Build and Test Commands
-```bash
-go build ./...          # build all packages
-go test ./...           # run all tests
-```
-
 ## Architecture (Clean Architecture)
 Dependencies flow inward. Code is organized **by feature**.
 1. **Infrastructure**: LLM SDKs, databases, external services.
@@ -40,6 +34,10 @@ To ensure "Knowing and Doing are One", every agent must follow this cycle:
 - **No heavy frameworks** (LangChain, LangGraph). Keep the agent loop short and understood.
 - **Go-first**: Type system as contract, implicit interfaces, and high performance.
 - **Harness engineering**: Validation, retry with context, and circuit breakers are mandatory.
+
+## Release Workflow
+- If an AI agent performs a release, preserve the agent attribution in the commit metadata as a `Co-Author`.
+- Some tools add this automatically; for tools that do not, the agent must add it explicitly instead of omitting it.
 
 ## Current LLM Contract
 - `llm.ReasoningEngine[TIntent]` returns `llm.ReasoningResult[TIntent]` with evidence, rationale, and typed intent.
