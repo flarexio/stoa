@@ -1,5 +1,7 @@
 # Stoa 🏛️
 
+[繁體中文](README.zh-TW.md)
+
 > A stoa for AI agents — where knowing meets doing.
 
 **Stoa** is a Go workshop for crafting production-grade AI agents. It's not a framework. It's a way of thinking about agents.
