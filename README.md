@@ -1,6 +1,6 @@
 # Stoa 🏛️
 
-[繁體中文](README.zh-TW.md)
+[正體中文](README.zh-TW.md)
 
 > A stoa for AI agents — where knowing meets doing.
 
