@@ -13,8 +13,8 @@ Dependencies point inward. The LLM SDK, database client, filesystem, shell, brow
 ## Core Principles
 
 1. **Domain is the conscience.** Domain code owns entities, invariants, and validators.
-2. **Use cases own the loop.** The agent cycle, retry policy, routing, and orchestration live in use case code.
-3. **Adapters translate.** Prompt rendering, output parsing, provider calls, and serialization live outside the use case boundary.
+2. **Use cases own the loop.** The agent cycle, retry policy, routing, feature prompts, and orchestration live in use case code.
+3. **Adapters translate.** Provider message translation, output parsing, provider calls, and serialization live outside the use case boundary.
 4. **Infrastructure executes.** Concrete SDKs, tools, databases, and operating-system calls are implementation details.
 5. **Contracts are typed.** Agents exchange intents, observations, errors, and handoffs as Go types, not free-form text.
 
@@ -32,7 +32,7 @@ graph LR
 
     subgraph Adapters ["Interface Adapters: Translation"]
         LLMAdapter["Reasoning Engine Adapter"]
-        Prompt["Prompt Renderer"]
+        Prompt["Provider Message Translator"]
         Parser["Structured Output Parser"]
         ExecutorAdapter["Executor Adapter"]
     end
@@ -52,8 +52,6 @@ graph LR
     Infrastructure --> Adapters
     Adapters --> UseCases
     UseCases --> Domain
-
-    style Domain fill:#f8b26a,stroke:#333,stroke-width:3px
 ```
 
 ## Feature Slice Layout
@@ -68,7 +66,7 @@ stoa/
     <domain>_test.go
   <agent>/              # Use case: the agent loop that operates on <domain>
     agent.go            # Orchestration (imports <domain>, llm, harness/loop)
-    prompt.go           # Feature-specific PromptRenderer
+    prompt.go           # Feature-specific provider-neutral PromptRenderer
     agent_test.go
     integration_test.go
   harness/
@@ -84,11 +82,11 @@ stoa/
   docs/
 ```
 
-Example: `icd/` defines ICD-10 `Note`, `Intent`, `Validator`, and the `Dictionary`/`Recorder` ports with their in-memory defaults. `coder/` is the clinical-coding agent that orchestrates the loop, renders prompts, and wires OpenAI. `icd/` never imports `coder/` or `llm/`.
+Example: `icd/` defines ICD-10 `Note`, `Intent`, `Validator`, and the `Dictionary`/`Recorder` ports with their in-memory defaults. `coder/` is the clinical-coding agent that orchestrates the loop and renders the ICD-specific prompt. The OpenAI wiring happens at the composition edge, where `coder.PromptRenderer` is passed into `llm/openai`. `icd/` never imports `coder/` or `llm/`.
 
 Port interfaces and their simplest in-process default implementations (in-memory stores, stdlib-only helpers) live in the domain package, in keeping with the Go convention of shipping minimal defaults alongside interfaces (compare `io.Writer` and `io.Discard`). Infrastructure-specific adapters that pull in external SDKs or network dependencies (Postgres, Redis, HTTP) go in sibling subpackages under the domain (`<domain>/postgres/`, `<domain>/redis/`), not in the domain root.
 
-Feature-based organization does not mean dependency rules disappear. The direction still flows inward through interfaces: the agent depends on domain, never the reverse.
+Feature-based organization does not mean dependency rules disappear. The direction still flows inward through interfaces: the agent depends on domain, never the reverse. Cross-feature contracts, such as `llm.ReasoningEngine[TIntent]`, may live in shared packages when they are intentionally reusable across agents.
 
 ## The Stoa Cycle
 
@@ -97,7 +95,7 @@ Every agent follows the same cycle:
 1. **Reason with evidence.** The LLM explains which supplied facts support its proposed intent.
 2. **Emit structured intent.** The model outputs a typed intent, not an action.
 3. **Validate in domain code.** Pure Go rules decide whether the intent is allowed.
-4. **Execute through a port.** Use cases call an interface; infrastructure implements it.
+4. **Execute through a port.** Use cases call an interface; infrastructure implements it. In the ICD example, validated intents are recorded through `icd.Recorder`.
 5. **Feed back observations or errors.** Validation and execution results become typed context for the next cycle.
 
 ```mermaid
@@ -127,11 +125,11 @@ sequenceDiagram
     end
 ```
 
-The important boundary is that the use case depends on `ReasoningEngine` and `Executor` interfaces, not on concrete SDKs or tool clients.
+The important boundary is that the use case depends on `ReasoningEngine` and `Executor`-style interfaces, not on concrete SDKs or tool clients. A feature may also call domain ports directly when the port is itself a business concept, such as `icd.Recorder`.
 
 ## Ports, Not Infrastructure Dependencies
 
-Use cases define the capabilities they need as narrow interfaces. Adapters implement those interfaces using infrastructure.
+Use cases define the capabilities they need as narrow interfaces. Adapters implement those interfaces using infrastructure. If a port is useful across several features, it can live in a shared package; `llm.ReasoningEngine[TIntent]` is shared because the reasoning workflow is reusable while the intent type remains feature-owned.
 
 ```go
 type ReasoningEngine[TIntent any] interface {
@@ -143,7 +141,7 @@ type Executor[TIntent any] interface {
 }
 ```
 
-The domain does not know these interfaces exist unless they represent pure business concepts. Domain code should normally expose structs and validation methods only.
+The domain does not know these interfaces exist unless they represent pure business concepts. Domain code should normally expose structs and validation methods, plus ports for domain-owned capabilities such as dictionaries, repositories, or recorders.
 
 ```go
 type Intent struct {

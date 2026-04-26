@@ -29,8 +29,6 @@ type Config[TIntent any] struct {
 	APIKey       string
 	Model        string
 	OutputFormat OutputFormat
-	// Deprecated: prompt rendering is provider-neutral. Prefer passing Renderer directly.
-	SystemPrompt string
 	Renderer     llm.PromptRenderer
 	Decoder      llm.Decoder[TIntent]
 }
@@ -60,7 +58,7 @@ func NewAdapter[TIntent any](cfg Config[TIntent]) (*Adapter[TIntent], error) {
 
 	renderer := cfg.Renderer
 	if renderer == nil {
-		renderer = llm.DefaultPromptRenderer{SystemPrompt: strings.TrimSpace(cfg.SystemPrompt)}
+		renderer = llm.DefaultPromptRenderer{}
 	}
 
 	decoder := cfg.Decoder
