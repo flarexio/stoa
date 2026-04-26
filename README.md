@@ -100,27 +100,39 @@ See [`docs/architecture.md`](docs/architecture.md) for the full breakdown.
 
 ---
 
+## Current example: ICD-10 coding
+
+The current slice is a clinical coding agent. It reads a clinical note, proposes ICD-10 diagnosis codes, validates those suggestions against domain rules, and records only validated intents.
+
+```text
+clinical note
+→ reasoning result with evidence and rationale
+→ icd.Intent with code suggestions
+→ icd.Validator
+→ icd.Recorder
+```
+
+The important part is that `icd/` does not know anything about AI. It owns the medical coding model: notes, ICD code suggestions, dictionaries, recorders, and validation rules. `coder/` owns the use case loop and the ICD-specific prompt. `llm/openai/` is only one infrastructure adapter that can satisfy the shared reasoning engine contract.
+
+---
+
 ## Project layout
 
-Stoa organizes code **by feature**, not by architectural layer. Each agent lives in its own package with everything it needs — domain models, flow logic, prompts, and adapters — in one place.
+Stoa organizes code **by feature**, not by architectural layer. A feature is split into a domain package and an agent package so domain models remain independently importable while the agent loop stays explicit.
 
 ```
 stoa/
-├── harness/               # Cross-agent reusable components
-│   ├── validator/
-│   ├── retry/
-│   └── handoff/
-├── llm/                   # Shared LLM client abstractions
-├── tools/                 # Shared tool definitions
-├── cmd/                   # Executable entry points (if multiple)
-├── testdata/              # Golden sets for agent evaluation
+├── icd/                   # ICD-10 domain model, validator, dictionary, recorder
+├── coder/                 # Clinical coding agent loop and feature prompt
+├── harness/
+│   └── loop/              # Typed reason-validate-execute runner
+├── llm/                   # Shared reasoning contracts and prompt rendering
+│   └── openai/            # OpenAI provider adapter
 └── docs/
-    ├── architecture.md
-    ├── philosophy.md
-    └── decisions/         # Architecture Decision Records (ADRs)
+    └── architecture.md
 ```
 
-Agent packages are added per-agent as development progresses. Each follows the same shape: `model.go` for domain types & invariants, `agent.go` for the use case / task flow, `prompt.go` for prompt templates, `llm.go` for the LLM adapter, and `*_test.go` alongside.
+Future features should follow the same shape: a domain package for business concepts and invariants, and an agent package for orchestration and feature-specific prompting. Provider adapters stay outside the feature package unless the feature genuinely owns that infrastructure.
 
 ### Why feature-based, not layer-based
 
@@ -143,6 +155,25 @@ Go idiom organizes packages by **what they provide**, not what they contain. A `
 git clone https://github.com/flarexio/stoa.git
 cd stoa
 go mod download
+```
+
+### Run tests
+
+```bash
+go test ./...
+```
+
+The OpenAI integration test is skipped unless `OPENAI_API_KEY` is set:
+
+```bash
+OPENAI_API_KEY=... go test -v ./coder -run TestAgent_OpenAI
+```
+
+On PowerShell:
+
+```powershell
+$env:OPENAI_API_KEY="..."
+go test -v ./coder -run TestAgent_OpenAI
 ```
 
 ---

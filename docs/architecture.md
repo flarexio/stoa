@@ -22,37 +22,26 @@ Dependencies point inward. The LLM SDK, database client, filesystem, shell, brow
 
 Stoa combines Clean Architecture's inward dependency rule with Go's preference for feature-based packages.
 
-```mermaid
-graph LR
-    subgraph Infrastructure ["Infrastructure: SDKs, Tools, Storage"]
-        Provider["LLM Provider SDK"]
-        DB["Database / File System"]
-        Tool["Shell / HTTP / Browser / APIs"]
-    end
-
-    subgraph Adapters ["Interface Adapters: Translation"]
-        LLMAdapter["Reasoning Engine Adapter"]
-        Prompt["Provider Message Translator"]
-        Parser["Structured Output Parser"]
-        ExecutorAdapter["Executor Adapter"]
-    end
-
-    subgraph UseCases ["Use Cases: Agent Loop"]
-        Loop["Explicit Reason/Validate/Execute Loop"]
-        Ports["Ports Defined As Interfaces"]
-        Routing["Handoff Routing Policy"]
-    end
-
-    subgraph Domain ["Domain: Business Judgment"]
-        Intent["Intent Types"]
-        Rules["Validators and Invariants"]
-        HandoffContract["Handoff Contracts"]
-    end
-
-    Infrastructure --> Adapters
-    Adapters --> UseCases
-    UseCases --> Domain
+```text
+┌──────────────────────────────────────────────┐
+│ Infrastructure                               │
+│ SDKs, databases, files, external APIs        │
+│  ┌────────────────────────────────────────┐  │
+│  │ Interface Adapters                     │  │
+│  │ Provider adapters, translation, codecs │  │
+│  │  ┌──────────────────────────────────┐  │  │
+│  │  │ Use Cases                        │  │  │
+│  │  │ Agent loops and orchestration    │  │  │
+│  │  │  ┌────────────────────────────┐  │  │  │
+│  │  │  │ Domain                     │  │  │  │
+│  │  │  │ Entities, rules, validators│  │  │  │
+│  │  │  └────────────────────────────┘  │  │  │
+│  │  └──────────────────────────────────┘  │  │
+│  └────────────────────────────────────────┘  │
+└──────────────────────────────────────────────┘
 ```
+
+Dependencies point inward. Runtime calls can cross outward through interfaces, but source imports must not.
 
 ## Feature Slice Layout
 
