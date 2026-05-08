@@ -118,7 +118,7 @@ world situation
 
 The `world/` package owns game entities and rules (no LLM dependency). The `npc/` package owns the use-case loop. Provider adapters live in `llm/openai/` and are swappable.
 
-A tavern scenario ships in `testdata/scenarios/tavern.json`: Mira is a cautious merchant who owns healing potions; the player has low reputation; north road has bandits. This scenario drives the NPC tests and demo.
+A tavern scenario ships in `testdata/scenarios/tavern.json`: Mira is a cautious merchant who owns healing potions; the player has low reputation; north road has bandits. The NPC tests use an equivalent in-code fixture; the JSON file is the reference shape for future demos and loaders.
 
 ---
 

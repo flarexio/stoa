@@ -39,8 +39,11 @@ func (r PromptRenderer) buildSystemPrompt() string {
 	if !ok {
 		return npcSystemPrompt
 	}
-	loc, _ := r.World.Locations[actor.LocationID]
-	return fmt.Sprintf("%s\n\nYou are %s, a %s currently in %s.", npcSystemPrompt, actor.Name, actor.Role, loc.Name)
+	locName := actor.LocationID
+	if loc, ok := r.World.Locations[actor.LocationID]; ok {
+		locName = loc.Name
+	}
+	return fmt.Sprintf("%s\n\nYou are %s, a %s currently in %s.", npcSystemPrompt, actor.Name, actor.Role, locName)
 }
 
 func (r PromptRenderer) buildUserPrompt(input llm.ReasoningInput) string {

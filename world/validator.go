@@ -6,7 +6,8 @@ import (
 )
 
 // Validator enforces hard game rules for an NPCIntent before execution.
-// It holds a snapshot of the world state and the ID of the acting NPC.
+// World's maps are not deep-copied; callers must not mutate them while a
+// Validator is in use.
 type Validator struct {
 	World   WorldState
 	ActorID string
