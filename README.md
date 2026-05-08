@@ -102,9 +102,29 @@ See [`docs/architecture.md`](docs/architecture.md) for the full breakdown.
 
 ---
 
-## Current example: ICD-10 coding
+## Primary direction: game NPC harness
 
-The current slice is a clinical coding agent. It reads a clinical note, proposes ICD-10 diagnosis codes, validates those suggestions against domain rules, and records only validated intents.
+> **Stoa: A Domain-Validated Harness for LLM-Driven Game NPCs**
+
+Stoa's primary focus is proving that an LLM-powered NPC can propose a typed intent, have that intent validated by hard game-domain rules, execute only after validation, and self-correct after structured feedback — all without game logic leaking into the LLM layer.
+
+```text
+world situation
+→ LLM proposes NPCIntent (say, emotion, action)
+→ world.Validator enforces game rules
+→ executor mutates/observes world state
+→ validation errors feed back as typed events for correction
+```
+
+The `world/` package owns game entities and rules (no LLM dependency). The `npc/` package owns the use-case loop. Provider adapters live in `llm/openai/` and are swappable.
+
+A tavern scenario ships in `testdata/scenarios/tavern.json`: Mira is a cautious merchant who owns healing potions; the player has low reputation; north road has bandits. The NPC tests use an equivalent in-code fixture; the JSON file is the reference shape for future demos and loaders.
+
+---
+
+## Example: ICD-10 coding (proof-of-architecture)
+
+The ICD slice is an earlier proof of the same architecture applied to clinical coding. It reads a clinical note, proposes ICD-10 diagnosis codes, validates them against domain rules, and records only validated intents. It remains as an example of the pattern, not the product direction.
 
 ```text
 clinical note
@@ -114,7 +134,7 @@ clinical note
 → icd.Recorder
 ```
 
-The important part is that `icd/` does not know anything about AI. It owns the medical coding model: notes, ICD code suggestions, dictionaries, recorders, and validation rules. `coder/` owns the use case loop and the ICD-specific prompt. `llm/openai/` is only one infrastructure adapter that can satisfy the shared reasoning engine contract.
+`icd/` does not know anything about AI. It owns the medical coding model: notes, ICD code suggestions, dictionaries, recorders, and validation rules. `coder/` owns the use case loop and the ICD-specific prompt. `llm/openai/` is only one infrastructure adapter that can satisfy the shared reasoning engine contract.
 
 ---
 
@@ -124,12 +144,16 @@ Stoa organizes code **by feature**, not by architectural layer. A feature is spl
 
 ```
 stoa/
-├── icd/                   # ICD-10 domain model, validator, dictionary, recorder
-├── coder/                 # Clinical coding agent loop and feature prompt
+├── world/                 # Game domain: world state, actors, items, NPCIntent, validator
+├── npc/                   # NPC use-case loop and prompt rendering
+├── icd/                   # ICD-10 domain model, validator, dictionary, recorder (example)
+├── coder/                 # Clinical coding agent loop and feature prompt (example)
 ├── harness/
 │   └── loop/              # Typed reason-validate-execute runner
 ├── llm/                   # Shared reasoning contracts and prompt rendering
 │   └── openai/            # OpenAI provider adapter
+├── testdata/
+│   └── scenarios/         # Deterministic scenario fixtures (e.g. tavern.json)
 └── docs/
     └── architecture.md
 ```

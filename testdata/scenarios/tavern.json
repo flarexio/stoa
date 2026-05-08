@@ -1,0 +1,50 @@
+{
+  "locations": {
+    "tavern": {
+      "id": "tavern",
+      "name": "The Rusty Flagon",
+      "connections": ["north_road"]
+    },
+    "north_road": {
+      "id": "north_road",
+      "name": "North Road",
+      "connections": ["tavern"]
+    }
+  },
+  "actors": {
+    "mira": {
+      "id": "mira",
+      "name": "Mira",
+      "role": "merchant",
+      "location_id": "tavern",
+      "inventory": ["healing_potion"],
+      "personality": {
+        "cautious": true,
+        "friendly": false
+      }
+    },
+    "player": {
+      "id": "player",
+      "name": "Adventurer",
+      "role": "player",
+      "location_id": "tavern",
+      "inventory": [],
+      "personality": {
+        "cautious": false,
+        "friendly": true
+      }
+    }
+  },
+  "items": {
+    "healing_potion": {
+      "id": "healing_potion",
+      "name": "Healing Potion",
+      "value": 50
+    }
+  },
+  "relations": {
+    "player:mira": {
+      "reputation": -30
+    }
+  }
+}
