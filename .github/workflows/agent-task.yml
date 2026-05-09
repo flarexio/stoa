@@ -6,10 +6,7 @@ on:
 
 jobs:
   agent:
-    if: |
-      github.event.label.name == 'agent-ready' &&
-      contains(fromJson('["OWNER", "MEMBER", "COLLABORATOR"]'),
-               github.event.issue.author_association)
+    if: github.event.label.name == 'agent-ready'
     runs-on: ubuntu-latest
     steps:
       - name: Run Claude on issue
