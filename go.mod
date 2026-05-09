@@ -2,7 +2,10 @@ module github.com/flarexio/stoa
 
 go 1.25.3
 
-require github.com/openai/openai-go v1.12.0
+require (
+	github.com/openai/openai-go v1.12.0
+	github.com/urfave/cli/v3 v3.8.0
+)
 
 require (
 	github.com/tidwall/gjson v1.14.4 // indirect
