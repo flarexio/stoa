@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"io"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -17,8 +18,14 @@ func tavernPath(t *testing.T) string {
 	return filepath.Join("..", "..", "testdata", "scenarios", "tavern.json")
 }
 
-// decodeRunOutput tolerates the leading scenario/summary/etc fields and is
-// only concerned with the parts the issue requires.
+func runCLI(ctx context.Context, args []string, stdout, stderr io.Writer) error {
+	app := newApp(stdout, stderr)
+	full := append([]string{"stoa", "npc-run"}, args...)
+	return app.Run(ctx, full)
+}
+
+// runReport tolerates the leading scenario/summary/etc fields and is only
+// concerned with the parts the issue requires.
 type runReport struct {
 	Scenario    string           `json:"scenario"`
 	Summary     string           `json:"summary"`
@@ -34,8 +41,8 @@ type runReport struct {
 func TestRunNPC_TavernSelfCorrects(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	args := []string{tavernPath(t), "--actor", "mira"}
-	if err := runNPC(context.Background(), args, &stdout, &stderr); err != nil {
-		t.Fatalf("runNPC returned error: %v\nstderr: %s", err, stderr.String())
+	if err := runCLI(context.Background(), args, &stdout, &stderr); err != nil {
+		t.Fatalf("runCLI returned error: %v\nstderr: %s", err, stderr.String())
 	}
 
 	var rep runReport
@@ -85,8 +92,8 @@ func TestRunNPC_TavernSelfCorrects(t *testing.T) {
 func TestRunNPC_FlagsBeforePath(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	args := []string{"--actor", "mira", tavernPath(t)}
-	if err := runNPC(context.Background(), args, &stdout, &stderr); err != nil {
-		t.Fatalf("runNPC returned error: %v\nstderr: %s", err, stderr.String())
+	if err := runCLI(context.Background(), args, &stdout, &stderr); err != nil {
+		t.Fatalf("runCLI returned error: %v\nstderr: %s", err, stderr.String())
 	}
 	if !json.Valid(stdout.Bytes()) {
 		t.Fatalf("output is not valid JSON: %s", stdout.String())
@@ -95,18 +102,18 @@ func TestRunNPC_FlagsBeforePath(t *testing.T) {
 
 func TestRunNPC_RequiresActor(t *testing.T) {
 	var stdout, stderr bytes.Buffer
-	err := runNPC(context.Background(), []string{tavernPath(t)}, &stdout, &stderr)
+	err := runCLI(context.Background(), []string{tavernPath(t)}, &stdout, &stderr)
 	if err == nil {
 		t.Fatal("expected error when --actor is missing")
 	}
-	if !strings.Contains(err.Error(), "actor") {
+	if !strings.Contains(strings.ToLower(err.Error()), "actor") {
 		t.Errorf("error should mention actor, got %v", err)
 	}
 }
 
 func TestRunNPC_RequiresPath(t *testing.T) {
 	var stdout, stderr bytes.Buffer
-	err := runNPC(context.Background(), []string{"--actor", "mira"}, &stdout, &stderr)
+	err := runCLI(context.Background(), []string{"--actor", "mira"}, &stdout, &stderr)
 	if err == nil {
 		t.Fatal("expected error when scenario path is missing")
 	}
@@ -115,7 +122,7 @@ func TestRunNPC_RequiresPath(t *testing.T) {
 func TestRunNPC_UnknownActor(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	args := []string{tavernPath(t), "--actor", "ghost"}
-	err := runNPC(context.Background(), args, &stdout, &stderr)
+	err := runCLI(context.Background(), args, &stdout, &stderr)
 	if err == nil {
 		t.Fatal("expected error for unknown actor")
 	}
@@ -125,8 +132,8 @@ func TestRunNPC_CustomTaskOverridesSummary(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	const customTask = "A traveler asks Mira about the road."
 	args := []string{tavernPath(t), "--actor", "mira", "--task", customTask}
-	if err := runNPC(context.Background(), args, &stdout, &stderr); err != nil {
-		t.Fatalf("runNPC returned error: %v\nstderr: %s", err, stderr.String())
+	if err := runCLI(context.Background(), args, &stdout, &stderr); err != nil {
+		t.Fatalf("runCLI returned error: %v\nstderr: %s", err, stderr.String())
 	}
 
 	var rep runReport

@@ -4,22 +4,15 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"flag"
 	"fmt"
 	"io"
-	"strings"
+
+	"github.com/urfave/cli/v3"
 
 	"github.com/flarexio/stoa/llm"
 	"github.com/flarexio/stoa/npc"
 	"github.com/flarexio/stoa/world"
 )
-
-const npcRunUsage = `Usage: stoa npc-run <scenario.json> --actor <actor_id> [--task <text>] [--max-turns N]
-
-Loads a scenario JSON file, runs the npc.Agent loop with a deterministic
-scripted reasoning engine, and prints a JSON report to stdout. The scripted
-engine first proposes an invalid intent so the demo exercises Stoa's
-validation-feedback self-correction loop.`
 
 // runOutput is the machine-readable JSON document the CLI prints on success.
 type runOutput struct {
@@ -34,61 +27,71 @@ type runOutput struct {
 	Feedback    []string         `json:"feedback"`
 }
 
-func runNPC(ctx context.Context, args []string, stdout, stderr io.Writer) error {
-	fs := flag.NewFlagSet("npc-run", flag.ContinueOnError)
-	fs.SetOutput(stderr)
-	fs.Usage = func() { fmt.Fprintln(stderr, npcRunUsage) }
+func newNPCRunCommand(stdout io.Writer) *cli.Command {
+	return &cli.Command{
+		Name:      "npc-run",
+		Usage:     "Run an NPC reasoning loop against a scenario JSON file.",
+		ArgsUsage: "<scenario.json>",
+		Description: "Loads a scenario JSON file, runs the npc.Agent loop with a deterministic\n" +
+			"scripted reasoning engine, and prints a JSON report to stdout. The scripted\n" +
+			"engine first proposes an invalid intent so the demo exercises Stoa's\n" +
+			"validation-feedback self-correction loop.",
+		Flags: []cli.Flag{
+			&cli.StringFlag{
+				Name:     "actor",
+				Usage:    "actor ID to drive",
+				Required: true,
+			},
+			&cli.StringFlag{
+				Name:  "task",
+				Usage: "in-world task description (defaults to scenario summary)",
+			},
+			&cli.IntFlag{
+				Name:  "max-turns",
+				Usage: "maximum reasoning turns",
+				Value: 3,
+			},
+		},
+		Action: func(ctx context.Context, c *cli.Command) error {
+			return runNPC(ctx, c, stdout)
+		},
+	}
+}
 
-	actor := fs.String("actor", "", "actor ID to drive (required)")
-	task := fs.String("task", "", "in-world task description (defaults to scenario summary)")
-	maxTurns := fs.Int("max-turns", 3, "maximum reasoning turns")
-
-	// Allow the scenario path either before or after the flags so the issue's
-	// example invocation (path first, then --actor) works as written.
-	var path string
-	if len(args) > 0 && !strings.HasPrefix(args[0], "-") {
-		path, args = args[0], args[1:]
-	}
-	if err := fs.Parse(args); err != nil {
-		return err
-	}
-	if path == "" && fs.NArg() > 0 {
-		path = fs.Arg(0)
-	}
-	if path == "" {
-		fs.Usage()
+func runNPC(ctx context.Context, c *cli.Command, stdout io.Writer) error {
+	if c.NArg() == 0 {
 		return errors.New("npc-run: scenario path is required")
 	}
-	if *actor == "" {
-		fs.Usage()
-		return errors.New("npc-run: --actor is required")
-	}
+	path := c.Args().First()
+	actor := c.String("actor")
+	task := c.String("task")
+	maxTurns := int(c.Int("max-turns"))
 
 	scenario, err := world.LoadScenarioFile(path)
 	if err != nil {
 		return err
 	}
-	if _, ok := scenario.State.Actors[*actor]; !ok {
-		return fmt.Errorf("npc-run: actor %q not present in scenario", *actor)
+	if _, ok := scenario.State.Actors[actor]; !ok {
+		return fmt.Errorf("npc-run: actor %q not present in scenario", actor)
 	}
 
-	taskText := *task
+	taskText := task
 	if taskText == "" {
 		taskText = scenario.Summary
 	}
 	if taskText == "" {
-		taskText = fmt.Sprintf("Decide what %s does next.", *actor)
+		taskText = fmt.Sprintf("Decide what %s does next.", actor)
 	}
 
-	engine := newScriptedEngine(scenario.State, *actor)
-	agent := npc.Agent{Engine: engine, MaxTurns: *maxTurns}
+	engine := newScriptedEngine(scenario.State, actor)
+	agent := npc.Agent{Engine: engine, MaxTurns: maxTurns}
 
-	res, runErr := agent.Act(ctx, *actor, scenario.State, taskText)
+	res, runErr := agent.Act(ctx, actor, scenario.State, taskText)
 
 	out := runOutput{
 		Scenario:    scenario.Name,
 		Summary:     scenario.Summary,
-		Actor:       *actor,
+		Actor:       actor,
 		Task:        taskText,
 		Turns:       res.Turns,
 		Intent:      res.Intent,

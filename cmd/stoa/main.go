@@ -7,36 +7,28 @@ package main
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
+
+	"github.com/urfave/cli/v3"
 )
 
-const usage = `stoa - demo CLI for the Stoa NPC harness
-
-Usage:
-  stoa <command> [arguments]
-
-Commands:
-  npc-run    Run an NPC reasoning loop against a scenario JSON file.
-
-Run "stoa <command> -h" for help on a specific command.`
-
 func main() {
-	if len(os.Args) < 2 {
-		fmt.Fprintln(os.Stderr, usage)
-		os.Exit(2)
+	app := newApp(os.Stdout, os.Stderr)
+	if err := app.Run(context.Background(), os.Args); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
 	}
+}
 
-	cmd, args := os.Args[1], os.Args[2:]
-	switch cmd {
-	case "npc-run":
-		if err := runNPC(context.Background(), args, os.Stdout, os.Stderr); err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			os.Exit(1)
-		}
-	case "-h", "--help", "help":
-		fmt.Fprintln(os.Stdout, usage)
-	default:
-		fmt.Fprintf(os.Stderr, "stoa: unknown command %q\n\n%s\n", cmd, usage)
-		os.Exit(2)
+func newApp(stdout, stderr io.Writer) *cli.Command {
+	return &cli.Command{
+		Name:      "stoa",
+		Usage:     "demo CLI for the Stoa NPC harness",
+		Writer:    stdout,
+		ErrWriter: stderr,
+		Commands: []*cli.Command{
+			newNPCRunCommand(stdout),
+		},
 	}
 }
