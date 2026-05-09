@@ -120,6 +120,23 @@ The `world/` package owns game entities and rules (no LLM dependency). The `npc/
 
 A tavern scenario ships in `testdata/scenarios/tavern.json`: Mira is a cautious merchant who owns healing potions; the player has low reputation; north road has bandits. The NPC tests use an equivalent in-code fixture; the JSON file is the reference shape for future demos and loaders.
 
+### Demo: run an NPC turn from the command line
+
+`cmd/stoa` is a small CLI that loads a scenario JSON file, runs the same `npc.Agent` loop as the tests with a deterministic scripted reasoning engine, and prints a JSON report. No `OPENAI_API_KEY` or network access is required.
+
+```bash
+go run ./cmd/stoa npc-run testdata/scenarios/tavern.json --actor mira
+```
+
+The scripted engine intentionally proposes an invalid intent on its first turn (giving an item the actor does not own). The world validator rejects it, the loop feeds the rejection back as a typed event, and the engine corrects on the next turn. The final JSON report includes:
+
+- `scenario` and `summary` from the scenario file
+- `actor` and `task`
+- `turns` taken, the final `intent`, and the resulting `observation`
+- the full `events` trace and a `feedback` summary of any validation/execution errors
+
+Use `--task` to override the in-world prompt and `--max-turns` to bound the loop.
+
 ---
 
 ## Example: ICD-10 coding (proof-of-architecture)
@@ -144,6 +161,8 @@ Stoa organizes code **by feature**, not by architectural layer. A feature is spl
 
 ```
 stoa/
+├── cmd/
+│   └── stoa/              # Demo CLI (npc-run subcommand)
 ├── world/                 # Game domain: world state, actors, items, NPCIntent, validator
 ├── npc/                   # NPC use-case loop and prompt rendering
 ├── icd/                   # ICD-10 domain model, validator, dictionary, recorder (example)

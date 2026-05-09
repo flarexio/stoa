@@ -1,4 +1,6 @@
 {
+  "name": "tavern",
+  "summary": "Mira the cautious merchant tends the Rusty Flagon. The player has low reputation and asks for a magic sword Mira does not own.",
   "locations": {
     "tavern": {
       "id": "tavern",
