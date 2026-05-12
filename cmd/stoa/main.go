@@ -1,7 +1,7 @@
-// Command stoa is the demo CLI for Stoa's NPC harness. It is intentionally
-// small: a single subcommand wires a scenario JSON file through the same
-// reason → validate → execute loop the npc package uses in tests, with a
-// deterministic scripted reasoning engine so no live LLM provider is needed.
+// Command stoa is the demo CLI for Stoa's vertical slices. Each subcommand
+// wires a scenario JSON file through the same reason → validate → execute
+// loop the underlying package uses in tests, with a deterministic scripted
+// reasoning engine so no live LLM provider is needed.
 package main
 
 import (
@@ -24,11 +24,12 @@ func main() {
 func newApp(stdout, stderr io.Writer) *cli.Command {
 	return &cli.Command{
 		Name:      "stoa",
-		Usage:     "demo CLI for the Stoa NPC harness",
+		Usage:     "demo CLI for the Stoa harness",
 		Writer:    stdout,
 		ErrWriter: stderr,
 		Commands: []*cli.Command{
 			newNPCRunCommand(stdout),
+			newBookRunCommand(stdout),
 		},
 	}
 }
