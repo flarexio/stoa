@@ -9,7 +9,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/flarexio/stoa/accounting"
 	"github.com/flarexio/stoa/llm"
 )
 
@@ -24,18 +23,6 @@ func runBookCLI(ctx context.Context, args []string, stdout, stderr io.Writer) er
 	return app.Run(ctx, full)
 }
 
-type bookRunReport struct {
-	Scenario    string                   `json:"scenario"`
-	Description string                   `json:"description"`
-	Request     string                   `json:"request"`
-	Turns       int                      `json:"turns"`
-	Intent      accounting.JournalIntent `json:"intent"`
-	Entry       accounting.JournalEntry  `json:"entry"`
-	Observation llm.Observation          `json:"observation"`
-	Events      []llm.CycleEvent         `json:"events"`
-	Feedback    []string                 `json:"feedback"`
-}
-
 func TestRunBook_AWSBillSelfCorrects(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	args := []string{awsBillPath(t), "--request", "Paid AWS bill 100 USD using company credit card"}
@@ -43,7 +30,7 @@ func TestRunBook_AWSBillSelfCorrects(t *testing.T) {
 		t.Fatalf("runBookCLI returned error: %v\nstderr: %s", err, stderr.String())
 	}
 
-	var rep bookRunReport
+	var rep bookRunOutput
 	if err := json.Unmarshal(stdout.Bytes(), &rep); err != nil {
 		t.Fatalf("output is not valid JSON: %v\nraw: %s", err, stdout.String())
 	}
@@ -121,7 +108,7 @@ func TestRunBook_CustomAmount(t *testing.T) {
 	if err := runBookCLI(context.Background(), args, &stdout, &stderr); err != nil {
 		t.Fatalf("runBookCLI returned error: %v\nstderr: %s", err, stderr.String())
 	}
-	var rep bookRunReport
+	var rep bookRunOutput
 	if err := json.Unmarshal(stdout.Bytes(), &rep); err != nil {
 		t.Fatalf("output is not valid JSON: %v", err)
 	}

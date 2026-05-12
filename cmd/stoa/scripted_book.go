@@ -47,12 +47,14 @@ func (e *scriptedBookEngine) Predict(_ context.Context, input llm.ReasoningInput
 }
 
 // firstAttempt proposes an intent the validator will reject: a balanced
-// journal skeleton whose credit line is short, so total debits != total
-// credits. This exercises the validation-feedback loop on every run.
+// journal skeleton whose credit line is short by 10%, so total debits !=
+// total credits. A proportional delta keeps the credit positive at any
+// --amount value, so the demo always exercises the "debits != credits"
+// path rather than the "amount must be positive" path.
 func (e *scriptedBookEngine) firstAttempt() (accounting.JournalIntent, string) {
 	intent := e.balancedIntent()
 	if len(intent.Lines) >= 2 {
-		intent.Lines[1].Amount = intent.Lines[0].Amount - 1000
+		intent.Lines[1].Amount = intent.Lines[0].Amount - intent.Lines[0].Amount/10
 	}
 	return intent, "first attempt: misread the bill; credit short of debit"
 }
