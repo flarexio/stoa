@@ -98,6 +98,36 @@ func TestValidator_RejectsUnknownPeriod(t *testing.T) {
 	}
 }
 
+func TestValidator_RejectsZeroDate(t *testing.T) {
+	l := awsBillLedger(t)
+	intent := balancedAWSIntent()
+	intent.Date = time.Time{}
+	err := accounting.Validator{Ledger: l}.Validate(context.Background(), intent)
+	if err == nil || !strings.Contains(err.Error(), "date is required") {
+		t.Fatalf("expected zero-date error, got %v", err)
+	}
+}
+
+func TestValidator_RejectsDateBeforePeriod(t *testing.T) {
+	l := awsBillLedger(t)
+	intent := balancedAWSIntent()
+	intent.Date = time.Date(2026, 4, 30, 23, 0, 0, 0, time.UTC) // before 2026-05 start
+	err := accounting.Validator{Ledger: l}.Validate(context.Background(), intent)
+	if err == nil || !strings.Contains(err.Error(), "before period") {
+		t.Fatalf("expected date-before-period error, got %v", err)
+	}
+}
+
+func TestValidator_RejectsDateAfterPeriod(t *testing.T) {
+	l := awsBillLedger(t)
+	intent := balancedAWSIntent()
+	intent.Date = time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC) // after 2026-05 end
+	err := accounting.Validator{Ledger: l}.Validate(context.Background(), intent)
+	if err == nil || !strings.Contains(err.Error(), "after period") {
+		t.Fatalf("expected date-after-period error, got %v", err)
+	}
+}
+
 func TestValidator_RejectsInactiveAccount(t *testing.T) {
 	l := awsBillLedger(t)
 	intent := balancedAWSIntent()

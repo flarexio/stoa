@@ -1,6 +1,6 @@
 // Package bookkeeper is the bookkeeping use-case package. It wires the
 // accounting domain (entities, validator, ledger) through the harness loop:
-// the LLM proposes a accounting.JournalIntent, the accounting validator
+// the LLM proposes an accounting.JournalIntent, the accounting validator
 // enforces ledger invariants, and the ledger only posts the entry after
 // validation succeeds. Bookkeeping orchestration lives here; the accounting
 // domain stays free of LLM and harness dependencies.

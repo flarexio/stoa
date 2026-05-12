@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 )
 
 // Validator enforces the accounting invariants on a proposed JournalIntent.
@@ -35,6 +36,15 @@ func (v Validator) Validate(_ context.Context, intent JournalIntent) error {
 		errs = append(errs, fmt.Errorf("period %q does not exist", intent.PeriodID))
 	case period.Status == PeriodClosed:
 		errs = append(errs, fmt.Errorf("period %q is closed and cannot accept postings", intent.PeriodID))
+	}
+
+	switch {
+	case intent.Date.IsZero():
+		errs = append(errs, errors.New("date is required"))
+	case periodOK && intent.Date.Before(period.Start):
+		errs = append(errs, fmt.Errorf("date %s is before period %q starts (%s)", intent.Date.Format(time.RFC3339), intent.PeriodID, period.Start.Format(time.RFC3339)))
+	case periodOK && intent.Date.After(period.End):
+		errs = append(errs, fmt.Errorf("date %s is after period %q ends (%s)", intent.Date.Format(time.RFC3339), intent.PeriodID, period.End.Format(time.RFC3339)))
 	}
 
 	if len(intent.Lines) < 2 {

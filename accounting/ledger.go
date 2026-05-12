@@ -22,6 +22,13 @@ type IDGenerator func() string
 // Posted entries are stored privately and only exposed through copies, so the
 // "posted entries are immutable" invariant cannot be bypassed by mutating a
 // returned slice or struct.
+//
+// Concurrency: only Post, Entries, and Entry are safe to call concurrently.
+// The setup methods (AddAccount, AddBranch, AddPeriod, ClosePeriod) read and
+// write the Accounts/Branches/Periods maps without holding the mutex, so
+// they must complete before any concurrent Post begins. Live mutation of
+// the chart of accounts or period status alongside in-flight postings is
+// not supported by design.
 type Ledger struct {
 	Company  Company
 	Accounts map[string]Account // keyed by Code

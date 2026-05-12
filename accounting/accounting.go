@@ -86,7 +86,7 @@ type JournalLine struct {
 	Side        LineSide   `json:"side"`
 	Amount      int64      `json:"amount"`
 	Memo        string     `json:"memo,omitempty"`
-	Dimensions  Dimensions `json:"dimensions,omitempty"`
+	Dimensions  Dimensions `json:"dimensions"`
 }
 
 // JournalIntent is the typed output of the bookkeeping agent for one
