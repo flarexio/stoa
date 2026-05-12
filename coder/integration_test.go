@@ -12,12 +12,16 @@ import (
 )
 
 // TestAgent_OpenAI exercises the full loop against the real OpenAI API.
-// It is skipped automatically when OPENAI_API_KEY is not set, so normal
-// `go test ./...` runs do not hit the network.
+// It is gated by STOA_RUN_OPENAI_TESTS so that a plain `go test ./...` --
+// even with OPENAI_API_KEY in the environment -- never silently spends
+// API tokens. Both the flag and the API key must be set.
 func TestAgent_OpenAI(t *testing.T) {
+	if os.Getenv("STOA_RUN_OPENAI_TESTS") == "" {
+		t.Skip("set STOA_RUN_OPENAI_TESTS=1 to run OpenAI integration tests")
+	}
 	apiKey := os.Getenv("OPENAI_API_KEY")
 	if apiKey == "" {
-		t.Skip("OPENAI_API_KEY not set; skipping OpenAI integration test")
+		t.Fatal("STOA_RUN_OPENAI_TESTS is set but OPENAI_API_KEY is empty")
 	}
 
 	dict := icd.DefaultDictionary()
