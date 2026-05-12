@@ -92,6 +92,9 @@ type JournalLine struct {
 // JournalIntent is the typed output of the bookkeeping agent for one
 // transaction. It is not yet a posted entry: it must clear the accounting
 // Validator before Ledger.Post will accept it.
+//
+// Description is optional audit metadata for human reviewers; it is not
+// enforced by Validator and may be empty.
 type JournalIntent struct {
 	Date        time.Time     `json:"date"`
 	PeriodID    string        `json:"period_id"`

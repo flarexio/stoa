@@ -44,6 +44,13 @@ func (a Agent) Book(ctx context.Context, request string) (Result, error) {
 		return Result{}, errors.New("bookkeeper: agent has no ledger")
 	}
 
+	// Validator is run twice per successful turn: once by the harness loop
+	// (so validation failures surface as EventValidationError and feed the
+	// LLM correction cycle) and once inside Ledger.Post (the ledger's own
+	// safety gate -- it must never trust its caller). Under the documented
+	// concurrency model on Ledger, setup completes before any concurrent
+	// Post, so the two runs see the same Accounts/Branches/Periods state
+	// and the second run cannot reject what the first accepted.
 	validator := accounting.Validator{Ledger: a.Ledger}
 
 	var posted accounting.JournalEntry
