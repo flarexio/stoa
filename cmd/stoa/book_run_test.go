@@ -102,6 +102,31 @@ func TestRunBook_RequiresPath(t *testing.T) {
 	}
 }
 
+func TestRunBook_UnknownEngine(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	args := []string{awsBillPath(t), "--request", "x", "--engine", "anthropic"}
+	err := runBookCLI(context.Background(), args, &stdout, &stderr)
+	if err == nil {
+		t.Fatal("expected error for unknown --engine")
+	}
+	if !strings.Contains(err.Error(), "anthropic") {
+		t.Errorf("error should name the bad engine, got %v", err)
+	}
+}
+
+func TestRunBook_OpenAIRequiresAPIKey(t *testing.T) {
+	t.Setenv("OPENAI_API_KEY", "")
+	var stdout, stderr bytes.Buffer
+	args := []string{awsBillPath(t), "--request", "x", "--engine", "openai"}
+	err := runBookCLI(context.Background(), args, &stdout, &stderr)
+	if err == nil {
+		t.Fatal("expected error when --engine openai is selected without OPENAI_API_KEY")
+	}
+	if !strings.Contains(strings.ToLower(err.Error()), "openai_api_key") {
+		t.Errorf("error should mention OPENAI_API_KEY, got %v", err)
+	}
+}
+
 func TestRunBook_CustomAmount(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	args := []string{awsBillPath(t), "--request", "Paid larger bill", "--amount", "50000"}
