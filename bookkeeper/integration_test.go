@@ -23,6 +23,7 @@ func TestAgent_OpenAI(t *testing.T) {
 	ledger := awsBillLedger(t)
 	engine, err := openai.NewAdapter(openai.Config[accounting.JournalIntent]{
 		APIKey:       apiKey,
+		Model:        "gpt-5.4-mini",
 		OutputFormat: openai.OutputFormatJSONObject,
 		Renderer:     bookkeeper.PromptRenderer{Ledger: ledger},
 	})

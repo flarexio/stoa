@@ -79,11 +79,13 @@ go run ./cmd/stoa book-run testdata/accounting/aws_bill.json \
   --request "Paid AWS bill 100 USD using company credit card"
 
 # Live, against the real OpenAI API. Needs OPENAI_API_KEY in the
-# environment. --amount / --currency are ignored in this mode; the LLM
-# reads both from the request.
+# environment and --model (the adapter does not assume a default model).
+# --amount / --currency are ignored in this mode; the LLM reads both
+# from the request.
 OPENAI_API_KEY=sk-... go run ./cmd/stoa book-run \
   testdata/accounting/aws_bill.json \
   --engine openai \
+  --model gpt-5.4-mini \
   --request "Paid AWS bill 100 USD using company credit card on 12 May 2026"
 ```
 

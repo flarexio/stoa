@@ -23,6 +23,7 @@ func TestAgent_OpenAI(t *testing.T) {
 	dict := icd.DefaultDictionary()
 	engine, err := openai.NewAdapter(openai.Config[icd.Intent]{
 		APIKey:       apiKey,
+		Model:        "gpt-5.4-mini",
 		OutputFormat: openai.OutputFormatJSONObject,
 		Renderer:     coder.PromptRenderer{Dict: dict},
 	})

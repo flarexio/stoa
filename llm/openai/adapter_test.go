@@ -21,16 +21,27 @@ func TestNewAdapterRequiresAPIKey(t *testing.T) {
 	}
 }
 
-func TestNewAdapterDefaultsProviderConfig(t *testing.T) {
+func TestNewAdapterRequiresModel(t *testing.T) {
 	t.Setenv("OPENAI_API_KEY", "")
 
-	adapter, err := NewAdapter(Config[testIntent]{APIKey: "test-key"})
+	_, err := NewAdapter(Config[testIntent]{APIKey: "test-key"})
+	if err == nil {
+		t.Fatal("expected error when Model is empty")
+	}
+	if !strings.Contains(err.Error(), "model") {
+		t.Fatalf("error should mention model, got %v", err)
+	}
+}
+
+func TestNewAdapterAcceptsExplicitModel(t *testing.T) {
+	t.Setenv("OPENAI_API_KEY", "")
+
+	adapter, err := NewAdapter(Config[testIntent]{APIKey: "test-key", Model: "gpt-5.4-mini"})
 	if err != nil {
 		t.Fatalf("NewAdapter returned error: %v", err)
 	}
-
-	if adapter.model != defaultModel {
-		t.Fatalf("model = %q, want %q", adapter.model, defaultModel)
+	if adapter.model != "gpt-5.4-mini" {
+		t.Fatalf("model = %q, want gpt-5.4-mini", adapter.model)
 	}
 }
 
@@ -57,7 +68,8 @@ func TestRenderReasoningInputIncludesContract(t *testing.T) {
 
 func TestMessagesMapEnvironmentFeedbackToUserContext(t *testing.T) {
 	adapter, err := NewAdapter(Config[testIntent]{
-		APIKey:       "test-key",
+		APIKey: "test-key",
+		Model:  "gpt-5.4-mini",
 		Renderer: llm.DefaultPromptRenderer{
 			SystemPrompt: "system",
 		},
@@ -103,6 +115,7 @@ func TestCustomRendererAndDecoderDisableDefaultJSONMode(t *testing.T) {
 
 	adapter, err := NewAdapter(Config[testIntent]{
 		APIKey: "test-key",
+		Model:  "gpt-5.4-mini",
 		Renderer: llm.PromptRendererFunc(func(input llm.ReasoningInput) ([]llm.Message, error) {
 			return []llm.Message{{Role: llm.MessageRoleUser, Content: input.Task}}, nil
 		}),
