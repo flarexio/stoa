@@ -8,25 +8,29 @@ import (
 	"github.com/flarexio/stoa/llm"
 )
 
-// scriptedBookEngine is a deterministic, offline llm.ReasoningEngine used by
-// the book-run demo. It first proposes a JournalIntent that the accounting
-// Validator will reject (credits short of debits), then -- once validation
-// feedback appears in the cycle events -- proposes a balanced intent derived
-// from the seeded ledger. This proves the reason -> validate -> post -> feedback
-// loop end to end without needing an LLM provider.
+// scriptedBookEngine is a deterministic, offline llm.ReasoningEngine used
+// by the book-run demo. It first proposes a JournalIntent that the
+// accounting Validator will reject (credits short of debits), then --
+// once validation feedback appears in the cycle events -- proposes a
+// balanced intent derived from the seeded repository. This proves the
+// reason -> validate -> publish -> apply -> feedback loop end to end
+// without needing an LLM provider.
 type scriptedBookEngine struct {
-	ledger   *accounting.Ledger
+	repo     accounting.LedgerRepository
 	amount   int64
 	currency string
 }
 
-func newScriptedBookEngine(l *accounting.Ledger, amount int64, currency string) *scriptedBookEngine {
-	return &scriptedBookEngine{ledger: l, amount: amount, currency: currency}
+func newScriptedBookEngine(repo accounting.LedgerRepository, amount int64, currency string) *scriptedBookEngine {
+	return &scriptedBookEngine{repo: repo, amount: amount, currency: currency}
 }
 
-func (e *scriptedBookEngine) Predict(_ context.Context, input llm.ReasoningInput) (llm.ReasoningResult[accounting.JournalIntent], error) {
+func (e *scriptedBookEngine) Predict(ctx context.Context, input llm.ReasoningInput) (llm.ReasoningResult[accounting.JournalIntent], error) {
 	if hasValidationFeedback(input.Events) {
-		intent, rationale := e.recover()
+		intent, rationale, err := e.recover(ctx)
+		if err != nil {
+			return llm.ReasoningResult[accounting.JournalIntent]{}, err
+		}
 		return llm.ReasoningResult[accounting.JournalIntent]{
 			Evidence: []llm.EvidenceRef{
 				{Source: "validator", Fact: "previous intent failed validation; rebalancing credit to match debit"},
@@ -36,7 +40,10 @@ func (e *scriptedBookEngine) Predict(_ context.Context, input llm.ReasoningInput
 		}, nil
 	}
 
-	intent, rationale := e.firstAttempt()
+	intent, rationale, err := e.firstAttempt(ctx)
+	if err != nil {
+		return llm.ReasoningResult[accounting.JournalIntent]{}, err
+	}
 	return llm.ReasoningResult[accounting.JournalIntent]{
 		Evidence: []llm.EvidenceRef{
 			{Source: "scenario", Fact: "first attempt: drafted from the bookkeeping request"},
@@ -46,35 +53,45 @@ func (e *scriptedBookEngine) Predict(_ context.Context, input llm.ReasoningInput
 	}, nil
 }
 
-// firstAttempt proposes an intent the validator will reject: a balanced
-// journal skeleton whose credit line is short by 10%, so total debits !=
-// total credits. A proportional delta keeps the credit positive at any
-// --amount value, so the demo always exercises the "debits != credits"
-// path rather than the "amount must be positive" path.
-func (e *scriptedBookEngine) firstAttempt() (accounting.JournalIntent, string) {
-	intent := e.balancedIntent()
+func (e *scriptedBookEngine) firstAttempt(ctx context.Context) (accounting.JournalIntent, string, error) {
+	intent, err := e.balancedIntent(ctx)
+	if err != nil {
+		return accounting.JournalIntent{}, "", err
+	}
 	if len(intent.Lines) >= 2 {
 		intent.Lines[1].Amount = intent.Lines[0].Amount - intent.Lines[0].Amount/10
 	}
-	return intent, "first attempt: misread the bill; credit short of debit"
+	return intent, "first attempt: misread the bill; credit short of debit", nil
 }
 
-// recover proposes a balanced intent derived from the scenario.
-func (e *scriptedBookEngine) recover() (accounting.JournalIntent, string) {
-	return e.balancedIntent(), "recover: rebalance credit to match debit"
+func (e *scriptedBookEngine) recover(ctx context.Context) (accounting.JournalIntent, string, error) {
+	intent, err := e.balancedIntent(ctx)
+	if err != nil {
+		return accounting.JournalIntent{}, "", err
+	}
+	return intent, "recover: rebalance credit to match debit", nil
 }
 
-// balancedIntent builds a debit-expense / credit-liability journal entry,
-// dated to the start of the first open period and tagged with the first
-// reporting branch if any. Accounts are picked in deterministic order so the
-// demo output is stable across runs.
-func (e *scriptedBookEngine) balancedIntent() accounting.JournalIntent {
-	period := firstOpenPeriod(e.ledger)
-	expense := firstActiveAccount(e.ledger, accounting.AccountExpense)
-	liability := firstActiveAccount(e.ledger, accounting.AccountLiability)
+func (e *scriptedBookEngine) balancedIntent(ctx context.Context) (accounting.JournalIntent, error) {
+	period, err := firstOpenPeriod(ctx, e.repo)
+	if err != nil {
+		return accounting.JournalIntent{}, err
+	}
+	expense, err := firstActiveAccount(ctx, e.repo, accounting.AccountExpense)
+	if err != nil {
+		return accounting.JournalIntent{}, err
+	}
+	liability, err := firstActiveAccount(ctx, e.repo, accounting.AccountLiability)
+	if err != nil {
+		return accounting.JournalIntent{}, err
+	}
 
 	dims := accounting.Dimensions{}
-	if branch := firstBranch(e.ledger); branch != "" {
+	branch, err := firstBranch(ctx, e.repo)
+	if err != nil {
+		return accounting.JournalIntent{}, err
+	}
+	if branch != "" {
 		dims.BranchID = branch
 	}
 
@@ -99,47 +116,45 @@ func (e *scriptedBookEngine) balancedIntent() accounting.JournalIntent {
 				Dimensions:  dims,
 			},
 		},
-	}
+	}, nil
 }
 
-func firstActiveAccount(l *accounting.Ledger, t accounting.AccountType) string {
-	codes := make([]string, 0, len(l.Accounts))
-	for code := range l.Accounts {
-		codes = append(codes, code)
+func firstActiveAccount(ctx context.Context, repo accounting.LedgerRepository, t accounting.AccountType) (string, error) {
+	accounts, err := repo.Accounts(ctx)
+	if err != nil {
+		return "", err
 	}
-	sort.Strings(codes)
-	for _, code := range codes {
-		a := l.Accounts[code]
+	sort.Slice(accounts, func(i, j int) bool { return accounts[i].Code < accounts[j].Code })
+	for _, a := range accounts {
 		if a.Type == t && a.Active {
-			return code
+			return a.Code, nil
 		}
 	}
-	return ""
+	return "", nil
 }
 
-func firstOpenPeriod(l *accounting.Ledger) accounting.Period {
-	ids := make([]string, 0, len(l.Periods))
-	for id := range l.Periods {
-		ids = append(ids, id)
+func firstOpenPeriod(ctx context.Context, repo accounting.LedgerRepository) (accounting.Period, error) {
+	periods, err := repo.Periods(ctx)
+	if err != nil {
+		return accounting.Period{}, err
 	}
-	sort.Strings(ids)
-	for _, id := range ids {
-		p := l.Periods[id]
+	sort.Slice(periods, func(i, j int) bool { return periods[i].ID < periods[j].ID })
+	for _, p := range periods {
 		if p.Status == accounting.PeriodOpen {
-			return p
+			return p, nil
 		}
 	}
-	return accounting.Period{}
+	return accounting.Period{}, nil
 }
 
-func firstBranch(l *accounting.Ledger) string {
-	ids := make([]string, 0, len(l.Branches))
-	for id := range l.Branches {
-		ids = append(ids, id)
+func firstBranch(ctx context.Context, repo accounting.LedgerRepository) (string, error) {
+	branches, err := repo.Branches(ctx)
+	if err != nil {
+		return "", err
 	}
-	sort.Strings(ids)
-	if len(ids) > 0 {
-		return ids[0]
+	sort.Slice(branches, func(i, j int) bool { return branches[i].ID < branches[j].ID })
+	if len(branches) > 0 {
+		return branches[0].ID, nil
 	}
-	return ""
+	return "", nil
 }

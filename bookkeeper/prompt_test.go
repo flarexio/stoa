@@ -1,16 +1,21 @@
 package bookkeeper_test
 
 import (
+	"context"
 	"strings"
 	"testing"
 
+	"github.com/flarexio/stoa/accounting"
 	"github.com/flarexio/stoa/bookkeeper"
 	"github.com/flarexio/stoa/llm"
 )
 
 func TestPromptRenderer_IncludesActiveAccountsAndOpenPeriods(t *testing.T) {
-	ledger := awsBillLedger(t)
-	renderer := bookkeeper.PromptRenderer{Ledger: ledger}
+	scenario, repo := awsBillScenario(t)
+	renderer, err := bookkeeper.NewPromptRenderer(context.Background(), scenario.Company, repo)
+	if err != nil {
+		t.Fatalf("new renderer: %v", err)
+	}
 
 	messages, err := renderer.Render(llm.ReasoningInput{
 		Task: "Paid AWS bill 100 USD using company credit card",
@@ -30,25 +35,24 @@ func TestPromptRenderer_IncludesActiveAccountsAndOpenPeriods(t *testing.T) {
 
 	user := messages[1].Content
 	for _, want := range []string{
-		"Paid AWS bill 100 USD using company credit card", // task echoed
-		"Acme Cloud Co.",      // company name from fixture
-		"5200 Cloud Hosting",  // active expense account
-		"2100 Credit Card",    // active liability account
-		"2026-05",             // open period
-		"hq",                  // branch
-		"eu",                  // branch
-		`"side":"debit"`,      // JSON schema example
-		"minor currency units", // unit guidance
+		"Paid AWS bill 100 USD using company credit card",
+		"Acme Cloud Co.",
+		"5200 Cloud Hosting",
+		"2100 Credit Card",
+		"2026-05",
+		"hq",
+		"eu",
+		`"side":"debit"`,
+		"minor currency units",
 	} {
 		if !strings.Contains(user, want) {
 			t.Errorf("user prompt missing %q\n--- prompt ---\n%s", want, user)
 		}
 	}
 
-	// Inactive accounts and closed periods must NOT leak into the prompt.
 	for _, hide := range []string{
-		"5900 Legacy Office Rent", // inactive
-		"2026-04",                 // closed in fixture
+		"5900 Legacy Office Rent",
+		"2026-04",
 	} {
 		if strings.Contains(user, hide) {
 			t.Errorf("user prompt should not include %q\n--- prompt ---\n%s", hide, user)
@@ -57,8 +61,11 @@ func TestPromptRenderer_IncludesActiveAccountsAndOpenPeriods(t *testing.T) {
 }
 
 func TestPromptRenderer_AppendsValidationFeedbackAsMessages(t *testing.T) {
-	ledger := awsBillLedger(t)
-	renderer := bookkeeper.PromptRenderer{Ledger: ledger}
+	scenario, repo := awsBillScenario(t)
+	renderer, err := bookkeeper.NewPromptRenderer(context.Background(), scenario.Company, repo)
+	if err != nil {
+		t.Fatalf("new renderer: %v", err)
+	}
 
 	messages, err := renderer.Render(llm.ReasoningInput{
 		Task: "Paid AWS bill",
@@ -84,8 +91,8 @@ func TestPromptRenderer_AppendsValidationFeedbackAsMessages(t *testing.T) {
 	}
 }
 
-func TestPromptRenderer_NilLedger(t *testing.T) {
-	if _, err := (bookkeeper.PromptRenderer{}).Render(llm.ReasoningInput{}); err == nil {
-		t.Fatal("expected error when renderer has no ledger")
+func TestNewPromptRenderer_NilRepo(t *testing.T) {
+	if _, err := bookkeeper.NewPromptRenderer(context.Background(), accounting.Company{}, nil); err == nil {
+		t.Fatal("expected error when constructing renderer with nil repository")
 	}
 }

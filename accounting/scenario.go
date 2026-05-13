@@ -1,6 +1,7 @@
 package accounting
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -8,8 +9,13 @@ import (
 )
 
 // Scenario is the on-disk shape of an accounting fixture. It carries the
-// company, chart of accounts, branches, and periods that seed a Ledger,
-// plus optional metadata used by demos and tests.
+// company, chart of accounts, branches, and periods that seed a
+// LedgerRepository before the bookkeeper agent starts posting entries.
+//
+// Scenario intentionally does not carry journal entries: those arrive
+// through the event stream as JournalPosted, never as static fixture
+// data, so the projection is always built from the same code path in
+// tests and in production.
 type Scenario struct {
 	Name        string    `json:"name,omitempty"`
 	Description string    `json:"description,omitempty"`
@@ -40,17 +46,24 @@ func DecodeScenario(r io.Reader) (Scenario, error) {
 	return s, nil
 }
 
-// BuildLedger constructs a fresh Ledger seeded from the scenario.
-func (s Scenario) BuildLedger() *Ledger {
-	l := NewLedger(s.Company)
+// Seed loads the scenario's chart of accounts, branches, and periods into
+// repo through its Put* methods. Callers typically pass an empty
+// repository; Seed does not check for or merge with pre-existing state.
+func (s Scenario) Seed(ctx context.Context, repo LedgerRepository) error {
 	for _, a := range s.Accounts {
-		l.AddAccount(a)
+		if err := repo.PutAccount(ctx, a); err != nil {
+			return fmt.Errorf("accounting: seed account %q: %w", a.Code, err)
+		}
 	}
 	for _, b := range s.Branches {
-		l.AddBranch(b)
+		if err := repo.PutBranch(ctx, b); err != nil {
+			return fmt.Errorf("accounting: seed branch %q: %w", b.ID, err)
+		}
 	}
 	for _, p := range s.Periods {
-		l.AddPeriod(p)
+		if err := repo.PutPeriod(ctx, p); err != nil {
+			return fmt.Errorf("accounting: seed period %q: %w", p.ID, err)
+		}
 	}
-	return l
+	return nil
 }
