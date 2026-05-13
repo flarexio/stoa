@@ -139,6 +139,41 @@ Use `--task` to override the in-world prompt and `--max-turns` to bound the loop
 
 ---
 
+## Example: bookkeeping agent
+
+The accounting slice applies the same architecture to double-entry bookkeeping. A natural-language request is turned into a validated journal entry — the agent proposes a typed `JournalIntent`, the accounting domain validates it, and only a balanced, period-correct, account-valid entry is posted to the ledger.
+
+```text
+bookkeeping request
+→ LLM proposes JournalIntent (accounts, amounts, period)
+→ accounting.Validator enforces accounting invariants
+→ Ledger.Post records the entry only after validation succeeds
+→ validation errors feed back as typed events for self-correction
+```
+
+`accounting/` owns the domain model — chart of accounts, periods, journal entries, and validation rules — with no LLM dependency. `bookkeeper/` owns the use-case loop and the feature-specific prompt renderer.
+
+### Demo: run a bookkeeping entry from the command line
+
+```bash
+# Offline demo — uses a deterministic scripted engine. First turn
+# intentionally proposes an unbalanced entry so the loop always walks
+# through the validation-feedback cycle.
+go run ./cmd/stoa book-run testdata/accounting/aws_bill.json \
+  --request "Paid AWS bill 100 USD using company credit card"
+
+# Live, against the real OpenAI API. --model is required.
+OPENAI_API_KEY=sk-... go run ./cmd/stoa book-run \
+  testdata/accounting/aws_bill.json \
+  --engine openai \
+  --model gpt-5.4-mini \
+  --request "Paid AWS bill 100 USD using company credit card on 12 May 2026"
+```
+
+The JSON output includes: `request`, `turns`, the posted `entry`, the final `intent`, the full `events` trace, and a `feedback` summary of any validation errors.
+
+---
+
 ## Example: ICD-10 coding (proof-of-architecture)
 
 The ICD slice is an earlier proof of the same architecture applied to clinical coding. It reads a clinical note, proposes ICD-10 diagnosis codes, validates them against domain rules, and records only validated intents. It remains as an example of the pattern, not the product direction.
@@ -162,9 +197,11 @@ Stoa organizes code **by feature**, not by architectural layer. A feature is spl
 ```
 stoa/
 ├── cmd/
-│   └── stoa/              # Demo CLI (npc-run subcommand)
+│   └── stoa/              # Demo CLI (npc-run, book-run subcommands)
 ├── world/                 # Game domain: world state, actors, items, NPCIntent, validator
 ├── npc/                   # NPC use-case loop and prompt rendering
+├── accounting/            # Accounting domain: ledger, accounts, periods, validator
+├── bookkeeper/            # Bookkeeping agent loop and prompt rendering
 ├── icd/                   # ICD-10 domain model, validator, dictionary, recorder (example)
 ├── coder/                 # Clinical coding agent loop and feature prompt (example)
 ├── harness/
@@ -172,7 +209,8 @@ stoa/
 ├── llm/                   # Shared reasoning contracts and prompt rendering
 │   └── openai/            # OpenAI provider adapter
 ├── testdata/
-│   └── scenarios/         # Deterministic scenario fixtures (e.g. tavern.json)
+│   ├── scenarios/         # NPC scenario fixtures (e.g. tavern.json)
+│   └── accounting/        # Bookkeeping scenario fixtures (e.g. aws_bill.json)
 └── docs/
     └── architecture.md
 ```
@@ -208,18 +246,16 @@ go mod download
 go test ./...
 ```
 
-The OpenAI integration test is skipped unless `OPENAI_API_KEY` is set:
+This runs all unit and offline tests. No API key or network access required.
+
+OpenAI integration tests are gated behind two environment variables — both must be set:
 
 ```bash
-OPENAI_API_KEY=... go test -v ./coder -run TestAgent_OpenAI
+STOA_RUN_OPENAI_TESTS=1 OPENAI_API_KEY=sk-... \
+  go test -v -run TestAgent_OpenAI ./bookkeeper/... ./coder/...
 ```
 
-On PowerShell:
-
-```powershell
-$env:OPENAI_API_KEY="..."
-go test -v ./coder -run TestAgent_OpenAI
-```
+The `STOA_RUN_OPENAI_TESTS` gate ensures that `go test ./...` never silently spends API tokens even when `OPENAI_API_KEY` is present in the environment.
 
 ---
 

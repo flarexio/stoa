@@ -67,6 +67,35 @@ Branches share the single ledger. They appear only on
 dimensions. They are deliberately *not* separate `Ledger` instances; that
 prevents the system from drifting into branch-level shadow accounting.
 
+## Running the demo
+
+The `stoa book-run` CLI loads a scenario JSON file, runs the
+`bookkeeper.Agent` loop, and prints a JSON report:
+
+```bash
+# Offline, deterministic. Scripted engine first proposes an unbalanced
+# journal so the demo always walks through the validation-feedback loop.
+go run ./cmd/stoa book-run testdata/accounting/aws_bill.json \
+  --request "Paid AWS bill 100 USD using company credit card"
+
+# Live, against the real OpenAI API. Needs OPENAI_API_KEY in the
+# environment and --model (the adapter does not assume a default model).
+# --amount / --currency are ignored in this mode; the LLM reads both
+# from the request.
+OPENAI_API_KEY=sk-... go run ./cmd/stoa book-run \
+  testdata/accounting/aws_bill.json \
+  --engine openai \
+  --model gpt-5.4-mini \
+  --request "Paid AWS bill 100 USD using company credit card on 12 May 2026"
+```
+
+The prompt rendered for the LLM is built by `bookkeeper.PromptRenderer`,
+which reads the seeded ledger so the model sees the actual active chart
+of accounts, open periods, and known branches. Every constraint named in
+the system prompt is also enforced by `accounting.Validator`, so the LLM
+cannot ship a rule violation past the harness even if the prompt fails
+to dissuade it.
+
 ## Out of scope
 
 This domain intentionally does not include:

@@ -14,8 +14,6 @@ import (
 	"github.com/flarexio/stoa/llm"
 )
 
-const defaultModel = "gpt-5.4-mini"
-
 type OutputFormat string
 
 const (
@@ -53,7 +51,7 @@ func NewAdapter[TIntent any](cfg Config[TIntent]) (*Adapter[TIntent], error) {
 
 	model := strings.TrimSpace(cfg.Model)
 	if model == "" {
-		model = defaultModel
+		return nil, errors.New("model is required")
 	}
 
 	renderer := cfg.Renderer

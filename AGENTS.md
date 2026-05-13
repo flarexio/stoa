@@ -6,6 +6,11 @@ This file is the single source of truth for all AI agents (Gemini CLI, Claude Co
 Stoa is a Go workshop for building production-grade AI agents. It is not a framework -- it is an architecture and set of patterns for crafting agents that act and verify, not just reason.
 The name comes from the Greek στοά (covered colonnade), connecting Stoic philosophy (control what you can) with Wang Yangming's 知行合一 (unity of knowing and doing).
 
+### Feature domains
+- **NPC harness** (`world/`, `npc/`): LLM-driven game NPC that proposes typed intents validated by hard game rules. Demo: `stoa npc-run testdata/scenarios/tavern.json --actor mira`.
+- **Bookkeeping agent** (`accounting/`, `bookkeeper/`): turns natural-language requests into validated double-entry journal entries. Domain rules and invariants in `docs/accounting.md`. Demo: `stoa book-run testdata/accounting/aws_bill.json --request "..."`.
+- **ICD-10 coder** (`icd/`, `coder/`): architecture proof applied to clinical coding. Reads a clinical note, proposes ICD-10 codes, validates and records only valid suggestions.
+
 ## Architecture (Clean Architecture)
 Dependencies flow inward. Code is organized **by feature**.
 1. **Infrastructure**: LLM SDKs, databases, external services.
