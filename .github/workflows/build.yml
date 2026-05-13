@@ -24,7 +24,7 @@ jobs:
         run: go test -v ./...
 
       - name: Code Review with Claude
-        if: github.event_name == 'pull_request'
+        if: github.event.label.name == 'claude-review'
         uses: flarexio/claude-runner@v1
         with:
           prompt: |
