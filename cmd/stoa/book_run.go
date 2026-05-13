@@ -13,6 +13,8 @@ import (
 	"github.com/flarexio/stoa/bookkeeper"
 	"github.com/flarexio/stoa/llm"
 	"github.com/flarexio/stoa/llm/openai"
+	"github.com/flarexio/stoa/messaging/inproc"
+	"github.com/flarexio/stoa/persistence/memory"
 )
 
 // bookRunOutput is the machine-readable JSON document the CLI prints on
@@ -34,10 +36,11 @@ func newBookRunCommand(stdout io.Writer) *cli.Command {
 		Name:      "book-run",
 		Usage:     "Run a bookkeeping reasoning loop against an accounting scenario JSON file.",
 		ArgsUsage: "<scenario.json>",
-		Description: "Loads an accounting scenario JSON file, runs the bookkeeper.Agent loop,\n" +
-			"and prints a JSON report to stdout. Use --engine scripted (default) for the\n" +
-			"deterministic offline demo, or --engine openai to drive a real LLM through\n" +
-			"the same harness; the OpenAI engine needs OPENAI_API_KEY in the environment.",
+		Description: "Loads an accounting scenario JSON file, seeds the in-memory repository,\n" +
+			"runs the bookkeeper.Agent loop, and prints a JSON report to stdout. Use\n" +
+			"--engine scripted (default) for the deterministic offline demo, or\n" +
+			"--engine openai to drive a real LLM through the same harness; the OpenAI\n" +
+			"engine needs OPENAI_API_KEY in the environment.",
 		Flags: []cli.Flag{
 			&cli.StringFlag{
 				Name:     "request",
@@ -91,17 +94,35 @@ func runBook(ctx context.Context, c *cli.Command, stdout io.Writer) error {
 	if err != nil {
 		return err
 	}
-	ledger := scenario.BuildLedger()
 
-	if firstOpenPeriod(ledger).ID == "" {
-		return errors.New("book-run: scenario has no open period")
+	repo := memory.New()
+	if err := scenario.Seed(ctx, repo); err != nil {
+		return err
 	}
 
-	engine, err := buildBookEngine(engineKind, ledger, amount, currency, model)
+	period, err := firstOpenPeriod(ctx, repo)
 	if err != nil {
 		return err
 	}
-	agent := bookkeeper.Agent{Engine: engine, Ledger: ledger, MaxTurns: maxTurns}
+	if period.ID == "" {
+		return errors.New("book-run: scenario has no open period")
+	}
+
+	bus := inproc.New()
+	bus.Subscribe(accounting.EventHandlerFunc(func(ctx context.Context, evt accounting.JournalPosted) error {
+		return repo.Apply(ctx, evt)
+	}))
+
+	engine, err := buildBookEngine(ctx, engineKind, scenario, repo, amount, currency, model)
+	if err != nil {
+		return err
+	}
+	agent := bookkeeper.Agent{
+		Engine:    engine,
+		Repo:      repo,
+		Publisher: bus,
+		MaxTurns:  maxTurns,
+	}
 
 	res, runErr := agent.Book(ctx, request)
 
@@ -128,21 +149,33 @@ func runBook(ctx context.Context, c *cli.Command, stdout io.Writer) error {
 // buildBookEngine selects the reasoning engine the CLI feeds to the
 // bookkeeper agent. The scripted engine is offline and deterministic; the
 // openai engine drives a real LLM through the same harness loop.
-func buildBookEngine(kind string, ledger *accounting.Ledger, amount int64, currency, model string) (llm.ReasoningEngine[accounting.JournalIntent], error) {
+func buildBookEngine(ctx context.Context, kind string, scenario accounting.Scenario, repo accounting.LedgerRepository, amount int64, currency, model string) (llm.ReasoningEngine[accounting.JournalIntent], error) {
 	switch kind {
 	case "", "scripted":
-		if firstActiveAccount(ledger, accounting.AccountExpense) == "" {
+		expense, err := firstActiveAccount(ctx, repo, accounting.AccountExpense)
+		if err != nil {
+			return nil, err
+		}
+		if expense == "" {
 			return nil, errors.New("book-run: scripted engine requires an active expense account")
 		}
-		if firstActiveAccount(ledger, accounting.AccountLiability) == "" {
+		liability, err := firstActiveAccount(ctx, repo, accounting.AccountLiability)
+		if err != nil {
+			return nil, err
+		}
+		if liability == "" {
 			return nil, errors.New("book-run: scripted engine requires an active liability account")
 		}
-		return newScriptedBookEngine(ledger, amount, currency), nil
+		return newScriptedBookEngine(repo, amount, currency), nil
 	case "openai":
+		renderer, err := bookkeeper.NewPromptRenderer(ctx, scenario.Company, repo)
+		if err != nil {
+			return nil, fmt.Errorf("book-run: openai engine: %w", err)
+		}
 		adapter, err := openai.NewAdapter(openai.Config[accounting.JournalIntent]{
 			Model:        model,
 			OutputFormat: openai.OutputFormatJSONObject,
-			Renderer:     bookkeeper.PromptRenderer{Ledger: ledger},
+			Renderer:     renderer,
 		})
 		if err != nil {
 			return nil, fmt.Errorf("book-run: openai engine: %w", err)

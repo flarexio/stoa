@@ -24,21 +24,30 @@ func TestAgent_OpenAI(t *testing.T) {
 		t.Fatal("STOA_RUN_OPENAI_TESTS is set but OPENAI_API_KEY is empty")
 	}
 
-	ledger := awsBillLedger(t)
+	scenario, repo := awsBillScenario(t)
+	bus := wireBus(repo)
+
+	renderer, err := bookkeeper.NewPromptRenderer(context.Background(), scenario.Company, repo)
+	if err != nil {
+		t.Fatalf("new renderer: %v", err)
+	}
+
 	engine, err := openai.NewAdapter(openai.Config[accounting.JournalIntent]{
 		APIKey:       apiKey,
 		Model:        "gpt-5.4-mini",
 		OutputFormat: openai.OutputFormatJSONObject,
-		Renderer:     bookkeeper.PromptRenderer{Ledger: ledger},
+		Renderer:     renderer,
 	})
 	if err != nil {
 		t.Fatalf("new adapter: %v", err)
 	}
 
 	agent := bookkeeper.Agent{
-		Engine:   engine,
-		Ledger:   ledger,
-		MaxTurns: 3,
+		Engine:    engine,
+		Repo:      repo,
+		Publisher: bus,
+		Clock:     func() time.Time { return time.Date(2026, 5, 12, 9, 0, 0, 0, time.UTC) },
+		MaxTurns:  3,
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)

@@ -1,28 +1,46 @@
 // Package bookkeeper is the bookkeeping use-case package. It wires the
-// accounting domain (entities, validator, ledger) through the harness loop:
-// the LLM proposes an accounting.JournalIntent, the accounting validator
-// enforces ledger invariants, and the ledger only posts the entry after
-// validation succeeds. Bookkeeping orchestration lives here; the accounting
-// domain stays free of LLM and harness dependencies.
+// accounting domain through the harness loop: the LLM proposes an
+// accounting.JournalIntent, the accounting Validator enforces ledger
+// invariants against a LedgerRepository, and the bookkeeper publishes a
+// JournalPosted event through an EventPublisher. A subscribed
+// EventHandler applies the event to the projection. The bookkeeper never
+// writes to the repository itself, so the publish path is the single
+// authoritative place a posted entry comes into being.
 package bookkeeper
 
 import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/flarexio/stoa/accounting"
 	"github.com/flarexio/stoa/harness/loop"
 	"github.com/flarexio/stoa/llm"
 )
 
-// Agent runs one bookkeeping decision: a natural-language request is turned
-// into a typed JournalIntent, validated by the accounting domain, and only
-// posted to the Ledger after validation succeeds.
+// SubjectLedger is the default subject the bookkeeping agent publishes
+// JournalPosted events on for optimistic-concurrency scoping. Override
+// it via Agent.Subject when multiple ledgers share a transport.
+const SubjectLedger = "accounting.journal"
+
+// Clock returns the time a posted journal entry is stamped with. Default
+// is time.Now().UTC(); tests inject a deterministic clock through
+// Agent.Clock.
+type Clock func() time.Time
+
+// Agent runs one bookkeeping decision: a natural-language request is
+// turned into a typed JournalIntent, validated against the
+// LedgerRepository, and published as a JournalPosted event. Producers
+// never call repo.Apply; that is the consumer's job and runs inside the
+// EventHandler subscribed to the publisher.
 type Agent struct {
-	Engine   llm.ReasoningEngine[accounting.JournalIntent]
-	Ledger   *accounting.Ledger
-	MaxTurns int
+	Engine    llm.ReasoningEngine[accounting.JournalIntent]
+	Repo      accounting.LedgerRepository
+	Publisher accounting.EventPublisher
+	Subject   string
+	Clock     Clock
+	MaxTurns  int
 }
 
 // Result is the outcome of one bookkeeping cycle.
@@ -34,39 +52,62 @@ type Result struct {
 	Events      []llm.CycleEvent
 }
 
-// Book runs the reason → validate → post loop for the given bookkeeping
-// request. The request is forwarded to the LLM as the in-world task.
+// Book runs the reason -> validate -> publish loop for the given
+// bookkeeping request.
 func (a Agent) Book(ctx context.Context, request string) (Result, error) {
 	if a.Engine == nil {
 		return Result{}, errors.New("bookkeeper: agent has no reasoning engine")
 	}
-	if a.Ledger == nil {
-		return Result{}, errors.New("bookkeeper: agent has no ledger")
+	if a.Repo == nil {
+		return Result{}, errors.New("bookkeeper: agent has no repository")
+	}
+	if a.Publisher == nil {
+		return Result{}, errors.New("bookkeeper: agent has no event publisher")
 	}
 
-	// Validator is run twice per successful turn: once by the harness loop
-	// (so validation failures surface as EventValidationError and feed the
-	// LLM correction cycle) and once inside Ledger.Post (the ledger's own
-	// safety gate -- it must never trust its caller). Under the documented
-	// concurrency model on Ledger, setup completes before any concurrent
-	// Post, so the two runs see the same Accounts/Branches/Periods state
-	// and the second run cannot reject what the first accepted.
-	validator := accounting.Validator{Ledger: a.Ledger}
+	subject := a.Subject
+	if subject == "" {
+		subject = SubjectLedger
+	}
+	clock := a.Clock
+	if clock == nil {
+		clock = func() time.Time { return time.Now().UTC() }
+	}
+
+	validator := accounting.Validator{Repo: a.Repo}
 
 	var posted accounting.JournalEntry
 	executor := loop.ExecutorFunc[accounting.JournalIntent](func(ctx context.Context, intent accounting.JournalIntent) (llm.Observation, error) {
-		entry, err := a.Ledger.Post(ctx, intent)
+		lastSeq, err := a.Repo.LastSequence(ctx, subject)
 		if err != nil {
-			return llm.Observation{}, fmt.Errorf("bookkeeper: post: %w", err)
+			return llm.Observation{}, fmt.Errorf("bookkeeper: read last sequence: %w", err)
 		}
-		posted = entry
+
+		entry := accounting.JournalEntry{
+			Date:        intent.Date,
+			PeriodID:    intent.PeriodID,
+			Currency:    intent.Currency,
+			Description: intent.Description,
+			Lines:       intent.Lines,
+			PostedAt:    clock(),
+		}
+
+		dispatched, err := a.Publisher.Publish(ctx, accounting.JournalPosted{Entry: entry}, accounting.ExpectedSequence{
+			Subject: subject,
+			LastSeq: lastSeq,
+		})
+		if err != nil {
+			return llm.Observation{}, fmt.Errorf("bookkeeper: publish: %w", err)
+		}
+
+		posted = dispatched.Entry
 		return llm.Observation{
 			Summary: fmt.Sprintf("Posted journal entry %s for %s with %d line(s).",
-				entry.ID, entry.Description, len(entry.Lines)),
+				posted.ID, posted.Description, len(posted.Lines)),
 			Fields: map[string]string{
-				"entry_id":  entry.ID,
-				"period_id": entry.PeriodID,
-				"currency":  entry.Currency,
+				"entry_id":  posted.ID,
+				"period_id": posted.PeriodID,
+				"currency":  posted.Currency,
 			},
 		}, nil
 	})

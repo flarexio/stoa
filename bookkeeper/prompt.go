@@ -1,6 +1,7 @@
 package bookkeeper
 
 import (
+	"context"
 	"fmt"
 	"sort"
 	"strings"
@@ -10,22 +11,48 @@ import (
 )
 
 // PromptRenderer builds provider-neutral messages for a bookkeeping
-// reasoning turn. It reads the seeded ledger so the LLM sees the actual
-// active chart of accounts, open periods, and known branches -- the rules
-// in the system prompt are also enforced by accounting.Validator, so this
-// renderer never carries judgment the validator does not also enforce.
+// reasoning turn. It carries snapshots of the company, chart of accounts,
+// periods, and branches so Render itself is synchronous and free of
+// repository I/O on the hot path. If the chart of accounts changes
+// mid-session, construct a new renderer with NewPromptRenderer.
 //
 // Wire it into the llm/openai adapter via openai.Config.Renderer so the
 // bookkeeping use case never imports a provider SDK.
 type PromptRenderer struct {
-	Ledger *accounting.Ledger
+	Company  accounting.Company
+	Accounts []accounting.Account
+	Periods  []accounting.Period
+	Branches []accounting.Branch
+}
+
+// NewPromptRenderer reads the chart of accounts, periods, and branches
+// from repo once and returns a renderer ready to plug into an LLM
+// adapter.
+func NewPromptRenderer(ctx context.Context, company accounting.Company, repo accounting.LedgerRepository) (PromptRenderer, error) {
+	if repo == nil {
+		return PromptRenderer{}, fmt.Errorf("bookkeeper: NewPromptRenderer needs a repository")
+	}
+	accounts, err := repo.Accounts(ctx)
+	if err != nil {
+		return PromptRenderer{}, fmt.Errorf("bookkeeper: load accounts: %w", err)
+	}
+	periods, err := repo.Periods(ctx)
+	if err != nil {
+		return PromptRenderer{}, fmt.Errorf("bookkeeper: load periods: %w", err)
+	}
+	branches, err := repo.Branches(ctx)
+	if err != nil {
+		return PromptRenderer{}, fmt.Errorf("bookkeeper: load branches: %w", err)
+	}
+	return PromptRenderer{
+		Company:  company,
+		Accounts: accounts,
+		Periods:  periods,
+		Branches: branches,
+	}, nil
 }
 
 func (r PromptRenderer) Render(input llm.ReasoningInput) ([]llm.Message, error) {
-	if r.Ledger == nil {
-		return nil, fmt.Errorf("bookkeeper: prompt renderer has no ledger")
-	}
-
 	messages := []llm.Message{
 		{Role: llm.MessageRoleSystem, Content: bookkeeperSystemPrompt},
 		{Role: llm.MessageRoleUser, Content: r.buildUserPrompt(input)},
@@ -52,7 +79,7 @@ func (r PromptRenderer) buildUserPrompt(input llm.ReasoningInput) string {
 		b.WriteString(instr)
 	}
 
-	fmt.Fprintf(&b, "\n\nCompany: %s\n", r.Ledger.Company.Name)
+	fmt.Fprintf(&b, "\n\nCompany: %s\n", r.Company.Name)
 
 	b.WriteString("\nActive chart of accounts:\n")
 	b.WriteString(r.activeAccounts())
@@ -60,7 +87,7 @@ func (r PromptRenderer) buildUserPrompt(input llm.ReasoningInput) string {
 	b.WriteString("\nOpen accounting periods:\n")
 	b.WriteString(r.openPeriods())
 
-	if branches := r.branches(); branches != "" {
+	if branches := r.branchesText(); branches != "" {
 		b.WriteString("\nReporting branches (optional dimension on each line):\n")
 		b.WriteString(branches)
 	}
@@ -79,15 +106,11 @@ func (r PromptRenderer) buildUserPrompt(input llm.ReasoningInput) string {
 }
 
 func (r PromptRenderer) activeAccounts() string {
-	codes := make([]string, 0, len(r.Ledger.Accounts))
-	for code := range r.Ledger.Accounts {
-		codes = append(codes, code)
-	}
-	sort.Strings(codes)
+	sorted := append([]accounting.Account(nil), r.Accounts...)
+	sort.Slice(sorted, func(i, j int) bool { return sorted[i].Code < sorted[j].Code })
 
 	var b strings.Builder
-	for _, code := range codes {
-		a := r.Ledger.Accounts[code]
+	for _, a := range sorted {
 		if !a.Active {
 			continue
 		}
@@ -97,15 +120,11 @@ func (r PromptRenderer) activeAccounts() string {
 }
 
 func (r PromptRenderer) openPeriods() string {
-	ids := make([]string, 0, len(r.Ledger.Periods))
-	for id := range r.Ledger.Periods {
-		ids = append(ids, id)
-	}
-	sort.Strings(ids)
+	sorted := append([]accounting.Period(nil), r.Periods...)
+	sort.Slice(sorted, func(i, j int) bool { return sorted[i].ID < sorted[j].ID })
 
 	var b strings.Builder
-	for _, id := range ids {
-		p := r.Ledger.Periods[id]
+	for _, p := range sorted {
 		if p.Status != accounting.PeriodOpen {
 			continue
 		}
@@ -114,16 +133,12 @@ func (r PromptRenderer) openPeriods() string {
 	return b.String()
 }
 
-func (r PromptRenderer) branches() string {
-	ids := make([]string, 0, len(r.Ledger.Branches))
-	for id := range r.Ledger.Branches {
-		ids = append(ids, id)
-	}
-	sort.Strings(ids)
+func (r PromptRenderer) branchesText() string {
+	sorted := append([]accounting.Branch(nil), r.Branches...)
+	sort.Slice(sorted, func(i, j int) bool { return sorted[i].ID < sorted[j].ID })
 
 	var b strings.Builder
-	for _, id := range ids {
-		br := r.Ledger.Branches[id]
+	for _, br := range sorted {
 		fmt.Fprintf(&b, "  - %s (%s)\n", br.ID, br.Name)
 	}
 	return b.String()

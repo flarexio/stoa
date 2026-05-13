@@ -49,15 +49,22 @@ Each feature spans two Go packages: a domain package and an agent package. The s
 
 ```text
 stoa/
-  <domain>/             # Pure domain: entities, validators, port interfaces
+  <domain>/             # Pure domain: entities, validators, ports, events
     <domain>.go         # Value types and validators (stdlib-only)
-    <port>.go           # Port interface + its stdlib-only default implementation
+    <port>.go           # Port interface(s); ports are stdlib-only
+    event.go            # Typed domain events when the feature is event-driven
     <domain>_test.go
   <agent>/              # Use case: the agent loop that operates on <domain>
     agent.go            # Orchestration (imports <domain>, llm, harness/loop)
     prompt.go           # Feature-specific provider-neutral PromptRenderer
     agent_test.go
     integration_test.go
+  persistence/
+    memory/             # In-memory repository (test + dev default)
+    <backend>/          # Production repositories (e.g. persistence/postgres)
+  messaging/
+    inproc/             # In-process EventPublisher (test + dev default)
+    <transport>/        # Production transports (e.g. messaging/nats)
   harness/
     loop/               # Typed reason-validate-execute runner
     validator/          # Shared validation helpers and LLM feedback formatting
@@ -73,7 +80,9 @@ stoa/
 
 Example: `icd/` defines ICD-10 `Note`, `Intent`, `Validator`, and the `Dictionary`/`Recorder` ports with their in-memory defaults. `coder/` is the clinical-coding agent that orchestrates the loop and renders the ICD-specific prompt. The OpenAI wiring happens at the composition edge, where `coder.PromptRenderer` is passed into `llm/openai`. `icd/` never imports `coder/` or `llm/`.
 
-Port interfaces and their simplest in-process default implementations (in-memory stores, stdlib-only helpers) live in the domain package, in keeping with the Go convention of shipping minimal defaults alongside interfaces (compare `io.Writer` and `io.Discard`). Infrastructure-specific adapters that pull in external SDKs or network dependencies (Postgres, Redis, HTTP) go in sibling subpackages under the domain (`<domain>/postgres/`, `<domain>/redis/`), not in the domain root.
+Outbound adapters -- persistence implementations, message-bus transports, HTTP clients, anything that pulls in an external SDK or network dependency -- do not live under the domain package. They go in the top-level `persistence/` and `messaging/` trees (or their own peer tree for a new category), each adapter in its own subpackage that imports the domain it implements but is not imported by it. For example, `accounting.LedgerRepository` is satisfied by `persistence/memory` and (planned) `persistence/postgres`; `accounting.EventPublisher` is satisfied by `messaging/inproc` and (planned) `messaging/nats`. The domain remains stdlib-only.
+
+Trivial in-process defaults that exist only to make ports usable without infrastructure (an in-memory map satisfying a repository port, a synchronous fan-out satisfying a publisher port) still live in the outbound tree, not in the domain root -- this keeps `go doc <domain>` focused on entities, invariants, and ports, and gives every adapter the same shape regardless of how heavy it is.
 
 Feature-based organization does not mean dependency rules disappear. The direction still flows inward through interfaces: the agent depends on domain, never the reverse. Cross-feature contracts, such as `llm.ReasoningEngine[TIntent]`, may live in shared packages when they are intentionally reusable across agents.
 

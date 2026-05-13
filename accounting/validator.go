@@ -8,18 +8,22 @@ import (
 )
 
 // Validator enforces the accounting invariants on a proposed JournalIntent.
-// It reads from Ledger but never mutates it; Ledger.Post is the only path
-// that records an entry, and it runs Validator first.
+// It reads from a LedgerRepository -- never mutates it -- so the producer
+// loop sees the chart of accounts, open periods, and branches that the
+// projection has applied so far. Apply is reached only through Publish +
+// a subscribed EventHandler, never directly from this validator.
 type Validator struct {
-	Ledger *Ledger
+	Repo LedgerRepository
 }
 
-// Validate returns nil if intent satisfies every accounting invariant, or a
-// joined error describing every violation so the bookkeeping agent can fix
-// them all in one correction cycle.
-func (v Validator) Validate(_ context.Context, intent JournalIntent) error {
-	if v.Ledger == nil {
-		return errors.New("accounting: validator has no ledger")
+// Validate returns nil if intent satisfies every accounting invariant, or
+// a joined error describing every domain violation so the bookkeeping
+// agent can fix them all in one correction cycle. Infrastructure errors
+// from Repo (e.g. a SQL backend failing) are returned immediately and
+// are not joined with domain violations.
+func (v Validator) Validate(ctx context.Context, intent JournalIntent) error {
+	if v.Repo == nil {
+		return errors.New("accounting: validator has no repository")
 	}
 
 	var errs []error
@@ -28,14 +32,27 @@ func (v Validator) Validate(_ context.Context, intent JournalIntent) error {
 		errs = append(errs, errors.New("currency is required"))
 	}
 
-	period, periodOK := v.Ledger.Periods[intent.PeriodID]
+	var (
+		period   Period
+		periodOK bool
+	)
 	switch {
 	case intent.PeriodID == "":
 		errs = append(errs, errors.New("period_id is required"))
-	case !periodOK:
-		errs = append(errs, fmt.Errorf("period %q does not exist", intent.PeriodID))
-	case period.Status == PeriodClosed:
-		errs = append(errs, fmt.Errorf("period %q is closed and cannot accept postings", intent.PeriodID))
+	default:
+		p, ok, err := v.Repo.Period(ctx, intent.PeriodID)
+		if err != nil {
+			return fmt.Errorf("accounting: load period %q: %w", intent.PeriodID, err)
+		}
+		switch {
+		case !ok:
+			errs = append(errs, fmt.Errorf("period %q does not exist", intent.PeriodID))
+		case p.Status == PeriodClosed:
+			errs = append(errs, fmt.Errorf("period %q is closed and cannot accept postings", intent.PeriodID))
+		default:
+			period = p
+			periodOK = true
+		}
 	}
 
 	switch {
@@ -71,7 +88,10 @@ func (v Validator) Validate(_ context.Context, intent JournalIntent) error {
 		if line.AccountCode == "" {
 			errs = append(errs, fmt.Errorf("%s: account_code is required", label))
 		} else {
-			acct, ok := v.Ledger.Accounts[line.AccountCode]
+			acct, ok, err := v.Repo.Account(ctx, line.AccountCode)
+			if err != nil {
+				return fmt.Errorf("accounting: load account %q: %w", line.AccountCode, err)
+			}
 			switch {
 			case !ok:
 				errs = append(errs, fmt.Errorf("%s: account %q is not in the chart of accounts", label, line.AccountCode))
@@ -81,7 +101,11 @@ func (v Validator) Validate(_ context.Context, intent JournalIntent) error {
 		}
 
 		if line.Dimensions.BranchID != "" {
-			if _, ok := v.Ledger.Branches[line.Dimensions.BranchID]; !ok {
+			_, ok, err := v.Repo.Branch(ctx, line.Dimensions.BranchID)
+			if err != nil {
+				return fmt.Errorf("accounting: load branch %q: %w", line.Dimensions.BranchID, err)
+			}
+			if !ok {
 				errs = append(errs, fmt.Errorf("%s: branch %q is not a known reporting dimension", label, line.Dimensions.BranchID))
 			}
 		}

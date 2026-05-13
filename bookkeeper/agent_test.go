@@ -2,12 +2,15 @@ package bookkeeper_test
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/flarexio/stoa/accounting"
 	"github.com/flarexio/stoa/bookkeeper"
 	"github.com/flarexio/stoa/llm"
+	"github.com/flarexio/stoa/messaging/inproc"
+	"github.com/flarexio/stoa/persistence/memory"
 )
 
 type fakeEngineFunc func(ctx context.Context, input llm.ReasoningInput) (llm.ReasoningResult[accounting.JournalIntent], error)
@@ -16,15 +19,45 @@ func (f fakeEngineFunc) Predict(ctx context.Context, input llm.ReasoningInput) (
 	return f(ctx, input)
 }
 
-func awsBillLedger(t *testing.T) *accounting.Ledger {
+// awsBillRepo seeds an in-memory repository from the testdata fixture.
+func awsBillRepo(t *testing.T) *memory.Repository {
 	t.Helper()
 	scenario, err := accounting.LoadScenarioFile("../testdata/accounting/aws_bill.json")
 	if err != nil {
 		t.Fatalf("load fixture: %v", err)
 	}
-	l := scenario.BuildLedger()
-	l.Clock = func() time.Time { return time.Date(2026, 5, 12, 9, 0, 0, 0, time.UTC) }
-	return l
+	repo := memory.New()
+	if err := scenario.Seed(context.Background(), repo); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	return repo
+}
+
+// awsBillScenario returns the scenario alongside a seeded repository so
+// tests that need scenario.Company (the prompt renderer tests) do not
+// have to reload the file.
+func awsBillScenario(t *testing.T) (accounting.Scenario, *memory.Repository) {
+	t.Helper()
+	scenario, err := accounting.LoadScenarioFile("../testdata/accounting/aws_bill.json")
+	if err != nil {
+		t.Fatalf("load fixture: %v", err)
+	}
+	repo := memory.New()
+	if err := scenario.Seed(context.Background(), repo); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	return scenario, repo
+}
+
+// wireBus subscribes the standard apply handler so the bus's published
+// events land in the repo's projection. Returned as a convenience for
+// test setup.
+func wireBus(repo *memory.Repository) *inproc.Bus {
+	bus := inproc.New()
+	bus.Subscribe(accounting.EventHandlerFunc(func(ctx context.Context, evt accounting.JournalPosted) error {
+		return repo.Apply(ctx, evt)
+	}))
+	return bus
 }
 
 func balancedAWSIntent() accounting.JournalIntent {
@@ -40,8 +73,14 @@ func balancedAWSIntent() accounting.JournalIntent {
 	}
 }
 
+func fixedClock() time.Time {
+	return time.Date(2026, 5, 12, 9, 0, 0, 0, time.UTC)
+}
+
 func TestAgent_PostsBalancedJournal(t *testing.T) {
-	ledger := awsBillLedger(t)
+	repo := awsBillRepo(t)
+	bus := wireBus(repo)
+
 	engine := fakeEngineFunc(func(_ context.Context, _ llm.ReasoningInput) (llm.ReasoningResult[accounting.JournalIntent], error) {
 		return llm.ReasoningResult[accounting.JournalIntent]{
 			Rationale: "AWS invoice paid on credit card; expense debit, liability credit",
@@ -49,7 +88,13 @@ func TestAgent_PostsBalancedJournal(t *testing.T) {
 		}, nil
 	})
 
-	agent := bookkeeper.Agent{Engine: engine, Ledger: ledger, MaxTurns: 3}
+	agent := bookkeeper.Agent{
+		Engine:    engine,
+		Repo:      repo,
+		Publisher: bus,
+		Clock:     fixedClock,
+		MaxTurns:  3,
+	}
 	res, err := agent.Book(context.Background(), "Paid AWS bill 100 USD using company credit card")
 	if err != nil {
 		t.Fatalf("expected success, got %v", err)
@@ -60,21 +105,27 @@ func TestAgent_PostsBalancedJournal(t *testing.T) {
 	if res.Entry.ID == "" {
 		t.Fatal("expected posted entry to be returned")
 	}
-	if got := ledger.Entries(); len(got) != 1 {
-		t.Fatalf("expected one posted entry, got %d", len(got))
+	if !strings.HasPrefix(res.Entry.ID, "JE-") {
+		t.Fatalf("unexpected entry id format: %q", res.Entry.ID)
+	}
+	got, err := repo.Entries(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 || got[0].ID != res.Entry.ID {
+		t.Fatalf("expected one stored entry matching returned ID, got %+v", got)
 	}
 }
 
 func TestAgent_CorrectsAfterValidationFeedback(t *testing.T) {
-	ledger := awsBillLedger(t)
+	repo := awsBillRepo(t)
+	bus := wireBus(repo)
 
 	calls := 0
 	engine := fakeEngineFunc(func(_ context.Context, input llm.ReasoningInput) (llm.ReasoningResult[accounting.JournalIntent], error) {
 		calls++
 		switch calls {
 		case 1:
-			// First attempt: agent misreads the bill and lists the wrong credit
-			// amount, so debits and credits do not balance.
 			intent := balancedAWSIntent()
 			intent.Lines[1].Amount = 9000
 			return llm.ReasoningResult[accounting.JournalIntent]{
@@ -98,7 +149,7 @@ func TestAgent_CorrectsAfterValidationFeedback(t *testing.T) {
 		}
 	})
 
-	agent := bookkeeper.Agent{Engine: engine, Ledger: ledger, MaxTurns: 3}
+	agent := bookkeeper.Agent{Engine: engine, Repo: repo, Publisher: bus, Clock: fixedClock, MaxTurns: 3}
 	res, err := agent.Book(context.Background(), "Paid AWS bill 100 USD using company credit card")
 	if err != nil {
 		t.Fatalf("expected success after correction, got %v", err)
@@ -109,20 +160,21 @@ func TestAgent_CorrectsAfterValidationFeedback(t *testing.T) {
 	if calls != 2 {
 		t.Fatalf("expected engine called twice, got %d", calls)
 	}
-	if got := ledger.Entries(); len(got) != 1 {
-		t.Fatalf("expected exactly one entry posted after correction, got %d", len(got))
+	entries, _ := repo.Entries(context.Background())
+	if len(entries) != 1 {
+		t.Fatalf("expected exactly one entry posted after correction, got %d", len(entries))
 	}
 }
 
 func TestAgent_RejectsClosedPeriodIntent(t *testing.T) {
-	ledger := awsBillLedger(t)
+	repo := awsBillRepo(t)
+	bus := wireBus(repo)
 
 	calls := 0
 	engine := fakeEngineFunc(func(_ context.Context, _ llm.ReasoningInput) (llm.ReasoningResult[accounting.JournalIntent], error) {
 		calls++
 		intent := balancedAWSIntent()
 		if calls == 1 {
-			// First attempt targets the closed April period.
 			intent.PeriodID = "2026-04"
 		}
 		return llm.ReasoningResult[accounting.JournalIntent]{
@@ -131,7 +183,7 @@ func TestAgent_RejectsClosedPeriodIntent(t *testing.T) {
 		}, nil
 	})
 
-	agent := bookkeeper.Agent{Engine: engine, Ledger: ledger, MaxTurns: 3}
+	agent := bookkeeper.Agent{Engine: engine, Repo: repo, Publisher: bus, Clock: fixedClock, MaxTurns: 3}
 	res, err := agent.Book(context.Background(), "Record April AWS bill late")
 	if err != nil {
 		t.Fatalf("expected success after correcting to open period, got %v", err)
@@ -141,20 +193,81 @@ func TestAgent_RejectsClosedPeriodIntent(t *testing.T) {
 	}
 }
 
+func TestAgent_SequentialIDsAcrossPosts(t *testing.T) {
+	repo := awsBillRepo(t)
+	bus := wireBus(repo)
+
+	engine := fakeEngineFunc(func(_ context.Context, _ llm.ReasoningInput) (llm.ReasoningResult[accounting.JournalIntent], error) {
+		return llm.ReasoningResult[accounting.JournalIntent]{Intent: balancedAWSIntent()}, nil
+	})
+	agent := bookkeeper.Agent{Engine: engine, Repo: repo, Publisher: bus, Clock: fixedClock, MaxTurns: 3}
+
+	a, err := agent.Book(context.Background(), "first")
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := agent.Book(context.Background(), "second")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if a.Entry.ID == b.Entry.ID {
+		t.Fatalf("expected distinct IDs across posts, got %s and %s", a.Entry.ID, b.Entry.ID)
+	}
+}
+
+func TestAgent_ClosedPeriodMidSessionBlocksFurtherPosts(t *testing.T) {
+	ctx := context.Background()
+	repo := awsBillRepo(t)
+	bus := wireBus(repo)
+
+	engine := fakeEngineFunc(func(_ context.Context, _ llm.ReasoningInput) (llm.ReasoningResult[accounting.JournalIntent], error) {
+		return llm.ReasoningResult[accounting.JournalIntent]{Intent: balancedAWSIntent()}, nil
+	})
+	agent := bookkeeper.Agent{Engine: engine, Repo: repo, Publisher: bus, Clock: fixedClock, MaxTurns: 1}
+
+	if _, err := agent.Book(ctx, "first post should succeed"); err != nil {
+		t.Fatalf("first post: %v", err)
+	}
+
+	// Close the period directly through the repository's seed path.
+	period, _, _ := repo.Period(ctx, "2026-05")
+	period.Status = accounting.PeriodClosed
+	if err := repo.PutPeriod(ctx, period); err != nil {
+		t.Fatalf("close period: %v", err)
+	}
+
+	if _, err := agent.Book(ctx, "second post against closed period"); err == nil {
+		t.Fatal("expected error after closing the period")
+	}
+}
+
 func TestAgent_MissingEngine(t *testing.T) {
-	ledger := awsBillLedger(t)
-	agent := bookkeeper.Agent{Ledger: ledger}
+	repo := awsBillRepo(t)
+	bus := wireBus(repo)
+	agent := bookkeeper.Agent{Repo: repo, Publisher: bus}
 	if _, err := agent.Book(context.Background(), "x"); err == nil {
 		t.Fatal("expected error for missing engine")
 	}
 }
 
-func TestAgent_MissingLedger(t *testing.T) {
+func TestAgent_MissingRepo(t *testing.T) {
+	bus := inproc.New()
 	engine := fakeEngineFunc(func(_ context.Context, _ llm.ReasoningInput) (llm.ReasoningResult[accounting.JournalIntent], error) {
 		return llm.ReasoningResult[accounting.JournalIntent]{}, nil
 	})
-	agent := bookkeeper.Agent{Engine: engine}
+	agent := bookkeeper.Agent{Engine: engine, Publisher: bus}
 	if _, err := agent.Book(context.Background(), "x"); err == nil {
-		t.Fatal("expected error for missing ledger")
+		t.Fatal("expected error for missing repository")
+	}
+}
+
+func TestAgent_MissingPublisher(t *testing.T) {
+	repo := awsBillRepo(t)
+	engine := fakeEngineFunc(func(_ context.Context, _ llm.ReasoningInput) (llm.ReasoningResult[accounting.JournalIntent], error) {
+		return llm.ReasoningResult[accounting.JournalIntent]{}, nil
+	})
+	agent := bookkeeper.Agent{Engine: engine, Repo: repo}
+	if _, err := agent.Book(context.Background(), "x"); err == nil {
+		t.Fatal("expected error for missing publisher")
 	}
 }
