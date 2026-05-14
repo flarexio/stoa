@@ -1,4 +1,4 @@
-// Package inproc provides an in-process accounting.EventPublisher. It is
+// Package inproc provides an in-process bookkeeper.EventPublisher. It is
 // the test/dev counterpart of messaging/nats: same interface, same
 // optimistic-concurrency semantics, no external infrastructure. It is
 // not suitable for multi-process production deployments because the
@@ -10,9 +10,10 @@ import (
 	"sync"
 
 	"github.com/flarexio/stoa/accounting"
+	"github.com/flarexio/stoa/bookkeeper"
 )
 
-// Bus is an in-process accounting.EventPublisher. It dispatches every
+// Bus is an in-process bookkeeper.EventPublisher. It dispatches every
 // published event synchronously to all subscribed handlers under a single
 // mutex, so Publish returns only after every handler has finished. That
 // makes the bus suitable for tests that assert projection state
@@ -27,7 +28,7 @@ type Bus struct {
 	mu        sync.Mutex
 	streamSeq uint64
 	lastSubj  map[string]uint64
-	handlers  []accounting.EventHandler
+	handlers  []bookkeeper.EventHandler
 }
 
 // New returns an empty in-process bus.
@@ -38,7 +39,7 @@ func New() *Bus {
 // Subscribe registers handler to receive every subsequent JournalPosted
 // published through the bus. Handlers run in registration order under
 // the calling goroutine; the bus has no fan-out concurrency.
-func (b *Bus) Subscribe(handler accounting.EventHandler) {
+func (b *Bus) Subscribe(handler bookkeeper.EventHandler) {
 	b.mu.Lock()
 	b.handlers = append(b.handlers, handler)
 	b.mu.Unlock()
@@ -63,7 +64,7 @@ func (b *Bus) Publish(ctx context.Context, evt accounting.JournalPosted, expect 
 	if expect.Subject != "" {
 		b.lastSubj[expect.Subject] = seq
 	}
-	handlers := append([]accounting.EventHandler(nil), b.handlers...)
+	handlers := append([]bookkeeper.EventHandler(nil), b.handlers...)
 	b.mu.Unlock()
 
 	evt.Subject = expect.Subject

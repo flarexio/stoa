@@ -37,7 +37,7 @@ type Clock func() time.Time
 type Agent struct {
 	Engine    llm.ReasoningEngine[accounting.JournalIntent]
 	Repo      accounting.LedgerRepository
-	Publisher accounting.EventPublisher
+	Publisher EventPublisher
 	Subject   string
 	Clock     Clock
 	MaxTurns  int

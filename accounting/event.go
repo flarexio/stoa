@@ -1,7 +1,6 @@
 package accounting
 
 import (
-	"context"
 	"errors"
 	"fmt"
 )
@@ -36,10 +35,10 @@ func FormatEntryID(seq uint64) string {
 }
 
 // ExpectedSequence carries the optimistic-concurrency hint a producer
-// passes to EventPublisher.Publish. Subject is the scope of mutual
-// exclusion (typically one ledger; PR2 may introduce per-period subjects
-// if write contention emerges); LastSeq is the producer's view of the
-// last sequence already accepted on that Subject.
+// passes to bookkeeper.EventPublisher.Publish. Subject is the scope of
+// mutual exclusion (typically one ledger; later we may introduce
+// per-period subjects if write contention emerges); LastSeq is the
+// producer's view of the last sequence already accepted on that Subject.
 //
 // The broker rejects the publish with ErrConcurrentUpdate when its view
 // of the last sequence on Subject does not match LastSeq. A producer
@@ -54,34 +53,7 @@ type ExpectedSequence struct {
 	LastSeq uint64
 }
 
-// ErrConcurrentUpdate signals that EventPublisher.Publish was rejected
-// because the producer's ExpectedSequence is stale relative to the
-// broker's view. Producers should re-read repository state and retry.
+// ErrConcurrentUpdate signals that a publish was rejected because the
+// producer's ExpectedSequence is stale relative to the broker's view.
+// Producers should re-read repository state and retry.
 var ErrConcurrentUpdate = errors.New("accounting: concurrent update on subject")
-
-// EventPublisher publishes JournalPosted events through a transport. The
-// transport is the single point at which Subject and Sequence are
-// assigned, so the returned event carries those fields populated along
-// with Entry.ID. Callers should use the returned event, not the value
-// they passed in, when they need the broker-assigned identifiers.
-type EventPublisher interface {
-	Publish(ctx context.Context, evt JournalPosted, expect ExpectedSequence) (JournalPosted, error)
-}
-
-// EventHandler consumes a JournalPosted from a transport. Implementations
-// typically project the event into a LedgerRepository, but any subscriber
-// (notification, downstream agent handoff, metrics) implements the same
-// interface.
-type EventHandler interface {
-	Handle(ctx context.Context, evt JournalPosted) error
-}
-
-// EventHandlerFunc adapts an ordinary function to the EventHandler
-// interface so wiring code can subscribe small handlers without
-// declaring a named type.
-type EventHandlerFunc func(ctx context.Context, evt JournalPosted) error
-
-// Handle satisfies EventHandler.
-func (f EventHandlerFunc) Handle(ctx context.Context, evt JournalPosted) error {
-	return f(ctx, evt)
-}

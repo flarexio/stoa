@@ -1,6 +1,6 @@
-// Package nats provides a NATS JetStream backed accounting.EventPublisher
+// Package nats provides a NATS JetStream backed bookkeeper.EventPublisher
 // and a consumer driver that dispatches JournalPosted events to a
-// registered accounting.EventHandler. It is the production counterpart of
+// registered bookkeeper.EventHandler. It is the production counterpart of
 // messaging/inproc: same interface, same optimistic-concurrency semantics
 // (Nats-Expected-Last-Subject-Sequence), but the broker -- not a process
 // mutex -- holds the canonical stream.
@@ -21,6 +21,7 @@ import (
 	"github.com/nats-io/nats.go/jetstream"
 
 	"github.com/flarexio/stoa/accounting"
+	"github.com/flarexio/stoa/bookkeeper"
 )
 
 // Config carries the connection + JetStream settings the package needs
@@ -79,7 +80,7 @@ func (c *Conn) Close() {
 	}
 }
 
-// Publisher returns the accounting.EventPublisher bound to this Conn.
+// Publisher returns the bookkeeper.EventPublisher bound to this Conn.
 // All publishes go to cfg.Subject; ExpectedSequence.Subject is honoured
 // only as a non-empty signal that an optimistic-concurrency check is
 // required, the actual subject is the configured one (we run one
@@ -108,7 +109,7 @@ func (c *Conn) Consumer(ctx context.Context) (*Consumer, error) {
 	return &Consumer{c: cons}, nil
 }
 
-// Publisher implements accounting.EventPublisher over JetStream.
+// Publisher implements bookkeeper.EventPublisher over JetStream.
 type Publisher struct {
 	js      jetstream.JetStream
 	subject string
@@ -152,7 +153,7 @@ type Consumer struct {
 // populated JournalPosted (Subject + Sequence + Entry.ID). A successful
 // handler call Acks the message; a handler error Naks it for redelivery
 // per the consumer's ack policy.
-func (c *Consumer) Subscribe(ctx context.Context, handler accounting.EventHandler) error {
+func (c *Consumer) Subscribe(ctx context.Context, handler bookkeeper.EventHandler) error {
 	if c.context != nil {
 		return errors.New("nats: consumer already subscribed")
 	}

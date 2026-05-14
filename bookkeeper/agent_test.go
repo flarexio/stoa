@@ -54,7 +54,7 @@ func awsBillScenario(t *testing.T) (accounting.Scenario, *memory.Repository) {
 // test setup.
 func wireBus(repo *memory.Repository) *inproc.Bus {
 	bus := inproc.New()
-	bus.Subscribe(accounting.EventHandlerFunc(func(ctx context.Context, evt accounting.JournalPosted) error {
+	bus.Subscribe(bookkeeper.EventHandlerFunc(func(ctx context.Context, evt accounting.JournalPosted) error {
 		return repo.Apply(ctx, evt)
 	}))
 	return bus

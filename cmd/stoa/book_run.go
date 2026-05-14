@@ -197,11 +197,11 @@ func buildRepository(ctx context.Context, cfg config.Persistence) (accounting.Le
 	}
 }
 
-// buildMessaging materialises the accounting.EventPublisher chosen by
+// buildMessaging materialises the bookkeeper.EventPublisher chosen by
 // cfg and subscribes a single handler that applies events to repo. The
 // returned close func tears down whichever transport was opened.
-func buildMessaging(ctx context.Context, cfg config.Messaging, repo accounting.LedgerRepository) (accounting.EventPublisher, func(), error) {
-	apply := accounting.EventHandlerFunc(func(ctx context.Context, evt accounting.JournalPosted) error {
+func buildMessaging(ctx context.Context, cfg config.Messaging, repo accounting.LedgerRepository) (bookkeeper.EventPublisher, func(), error) {
+	apply := bookkeeper.EventHandlerFunc(func(ctx context.Context, evt accounting.JournalPosted) error {
 		return repo.Apply(ctx, evt)
 	})
 
