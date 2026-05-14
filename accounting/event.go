@@ -17,9 +17,9 @@ import (
 // transport when the event is dispatched to a handler. They are excluded
 // from JSON because broker metadata, not the body, is authoritative:
 // the inproc bus assigns them under its mutex, and the NATS adapter
-// (planned for PR2) recovers them from PubAck and the consumer's message
-// metadata. Entry.ID is derived from Sequence via FormatEntryID before
-// any handler receives the event, so handlers can rely on Entry.ID being
+// recovers them from PubAck and the consumer's message metadata.
+// Entry.ID is derived from Sequence via FormatEntryID before any
+// handler receives the event, so handlers can rely on Entry.ID being
 // populated even though it is empty on the wire.
 type JournalPosted struct {
 	Subject  string       `json:"-"`

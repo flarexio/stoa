@@ -1,0 +1,10 @@
+# Local environment config — copy config.example.yaml to start.
+/config.yaml
+
+# Editor + build noise
+*.swp
+*.swo
+.DS_Store
+
+# Local binary builds
+/stoa

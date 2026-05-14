@@ -1,9 +1,8 @@
 // Package inproc provides an in-process accounting.EventPublisher. It is
-// the test/dev counterpart of the NATS JetStream adapter (planned for
-// PR2): same interface, same optimistic-concurrency semantics, no
-// external infrastructure. It is not suitable for multi-process
-// production deployments because the broker state lives in process
-// memory.
+// the test/dev counterpart of messaging/nats: same interface, same
+// optimistic-concurrency semantics, no external infrastructure. It is
+// not suitable for multi-process production deployments because the
+// broker state lives in process memory.
 package inproc
 
 import (
