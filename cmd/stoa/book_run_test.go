@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -137,6 +138,56 @@ func TestRunBook_OpenAIRequiresModel(t *testing.T) {
 	}
 	if !strings.Contains(strings.ToLower(err.Error()), "model") {
 		t.Errorf("error should mention model, got %v", err)
+	}
+}
+
+func TestRunBook_ConfigSelectsMemoryAndInproc(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.yaml")
+	body := "persistence:\n  kind: memory\nmessaging:\n  kind: inproc\n"
+	if err := os.WriteFile(cfgPath, []byte(body), 0o600); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+	var stdout, stderr bytes.Buffer
+	args := []string{awsBillPath(t), "--request", "Paid AWS bill", "--config", cfgPath}
+	if err := runBookCLI(context.Background(), args, &stdout, &stderr); err != nil {
+		t.Fatalf("runBookCLI returned error: %v\nstderr: %s", err, stderr.String())
+	}
+	var rep bookRunOutput
+	if err := json.Unmarshal(stdout.Bytes(), &rep); err != nil {
+		t.Fatalf("output is not valid JSON: %v", err)
+	}
+	if rep.Entry.ID == "" {
+		t.Errorf("expected a posted entry under explicit memory+inproc config")
+	}
+}
+
+func TestRunBook_ConfigRejectsBadKind(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.yaml")
+	if err := os.WriteFile(cfgPath, []byte("persistence:\n  kind: mongodb\n"), 0o600); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+	var stdout, stderr bytes.Buffer
+	args := []string{awsBillPath(t), "--request", "x", "--config", cfgPath}
+	err := runBookCLI(context.Background(), args, &stdout, &stderr)
+	if err == nil {
+		t.Fatal("expected error from unsupported persistence kind")
+	}
+	if !strings.Contains(err.Error(), "mongodb") {
+		t.Errorf("error should name the bad kind, got %v", err)
+	}
+}
+
+func TestRunBook_ConfigMissingFile(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	args := []string{awsBillPath(t), "--request", "x", "--config", filepath.Join(t.TempDir(), "missing.yaml")}
+	err := runBookCLI(context.Background(), args, &stdout, &stderr)
+	if err == nil {
+		t.Fatal("expected error when --config points at a missing file")
+	}
+	if !strings.Contains(strings.ToLower(err.Error()), "config") {
+		t.Errorf("error should mention config, got %v", err)
 	}
 }
 
