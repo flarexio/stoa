@@ -59,10 +59,11 @@ func (b *bus) Close() error {
 
 // Publish assigns the next broker sequence under the bus's mutex (so the
 // optimistic-concurrency check and the sequence assignment are atomic),
-// stamps Subject, Sequence, and the derived Entry.ID into the event, and
-// dispatches it to every subscribed handler. The returned event is the
-// one handlers saw; callers should use it (its Entry has ID populated)
-// rather than the value they passed in.
+// stamps Subject + Sequence onto the event for transport-level routing,
+// and dispatches it to every subscribed handler. Entry.ID is set by the
+// producer before Publish is called (the agent picks it as
+// FormatEntryID(lastSeq+1)) and the transport carries it through
+// unchanged.
 func (b *bus) Publish(ctx context.Context, evt accounting.JournalPosted, expect accounting.ExpectedSequence) (accounting.JournalPosted, error) {
 	b.mu.Lock()
 	if expect.Subject != "" {
@@ -81,7 +82,6 @@ func (b *bus) Publish(ctx context.Context, evt accounting.JournalPosted, expect 
 
 	evt.Subject = expect.Subject
 	evt.Sequence = seq
-	evt.Entry.ID = accounting.FormatEntryID(seq)
 
 	for _, h := range handlers {
 		if err := h.Handle(ctx, evt); err != nil {

@@ -54,8 +54,14 @@ func TestEncodeEvent_OmitsSubjectAndSequence(t *testing.T) {
 	}
 }
 
-func TestDecodeEvent_StampsSubjectSequenceAndEntryID(t *testing.T) {
-	body, err := EncodeEvent(sampleEvent())
+func TestDecodeEvent_StampsSubjectSequenceAndCarriesEntryID(t *testing.T) {
+	// Entry.ID is producer-assigned, so it travels through the wire as
+	// part of the JSON body; DecodeEvent stamps only the broker
+	// metadata (Subject + Sequence).
+	in := sampleEvent()
+	in.Entry.ID = accounting.FormatEntryID(7)
+
+	body, err := EncodeEvent(in)
 	if err != nil {
 		t.Fatalf("EncodeEvent: %v", err)
 	}
@@ -69,8 +75,8 @@ func TestDecodeEvent_StampsSubjectSequenceAndEntryID(t *testing.T) {
 	if got.Sequence != 7 {
 		t.Errorf("sequence: got %d", got.Sequence)
 	}
-	if got.Entry.ID != accounting.FormatEntryID(7) {
-		t.Errorf("entry id: want %q got %q", accounting.FormatEntryID(7), got.Entry.ID)
+	if got.Entry.ID != in.Entry.ID {
+		t.Errorf("entry id: want %q got %q", in.Entry.ID, got.Entry.ID)
 	}
 	if got.Entry.PeriodID != "2026-05" {
 		t.Errorf("period id round-trip lost: %+v", got.Entry)
@@ -80,15 +86,17 @@ func TestDecodeEvent_StampsSubjectSequenceAndEntryID(t *testing.T) {
 	}
 }
 
-func TestStampPubAck_SequenceDrivesEntryID(t *testing.T) {
-	evt := sampleEvent()
-	stamped := StampPubAck(evt, "accounting.journal", 99)
-	want := accounting.FormatEntryID(99)
-	if stamped.Entry.ID != want {
-		t.Errorf("Entry.ID: want %q got %q", want, stamped.Entry.ID)
-	}
+func TestStampPubAck_StampsSubjectSequenceWithoutTouchingEntryID(t *testing.T) {
+	in := sampleEvent()
+	in.Entry.ID = accounting.FormatEntryID(99)
+
+	stamped := StampPubAck(in, "accounting.journal", 99)
 	if stamped.Subject != "accounting.journal" || stamped.Sequence != 99 {
 		t.Errorf("metadata not stamped: %+v", stamped)
+	}
+	// Producer-assigned ID must survive the broker round trip.
+	if stamped.Entry.ID != in.Entry.ID {
+		t.Errorf("Entry.ID: want %q (producer-assigned) got %q", in.Entry.ID, stamped.Entry.ID)
 	}
 }
 

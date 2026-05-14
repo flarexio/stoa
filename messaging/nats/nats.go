@@ -4,10 +4,15 @@
 // (Nats-Expected-Last-Subject-Sequence), but the broker -- not a process
 // mutex -- holds the canonical stream.
 //
-// Producers and consumers both compute Entry.ID from the JetStream stream
-// sequence via accounting.FormatEntryID, so neither side has to coordinate
-// to converge on the same identifier. The wire body carries only the
-// JournalEntry (Subject and Sequence are recovered from broker metadata).
+// Entry.ID is producer-assigned (see bookkeeper.Agent) before Publish is
+// called: the agent reads the current last_sequence from the repository,
+// adds one, formats it with accounting.FormatEntryID, and stamps the
+// result on the event. The transport leaves Entry.ID alone and only
+// stamps Subject + Sequence as broker metadata; consumers therefore read
+// the same identifier the producer wrote, with no derivation step on
+// either side. Optimistic concurrency at the broker keeps the chosen ID
+// safe from races -- a stale lastSeq guess is rejected as
+// ErrConcurrentUpdate before any duplicate ID can land.
 package nats
 
 import (
@@ -214,15 +219,16 @@ func DecodeEvent(body []byte, subject string, sequence uint64) (accounting.Journ
 	return StampPubAck(evt, subject, sequence), nil
 }
 
-// StampPubAck applies subject/sequence and the derived Entry.ID to an
+// StampPubAck applies the broker-assigned subject and sequence to an
 // event. Producers call it after PublishMsg returns; consumers call it
-// (via DecodeMsg) after pulling a message. Both sides converge on the
-// same Entry.ID because both feed the same sequence into
-// accounting.FormatEntryID.
+// (via DecodeMsg) after pulling a message. Entry.ID is not touched here:
+// the producer (bookkeeper.Agent) picks it as FormatEntryID(lastSeq+1)
+// before publishing and the transport carries it through the wire
+// unchanged, so consumer-side reads see the same identifier without any
+// derivation step.
 func StampPubAck(evt accounting.JournalPosted, subject string, sequence uint64) accounting.JournalPosted {
 	evt.Subject = subject
 	evt.Sequence = sequence
-	evt.Entry.ID = accounting.FormatEntryID(sequence)
 	return evt
 }
 

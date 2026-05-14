@@ -7,6 +7,30 @@
 // The package has no dependency on LLM SDKs, provider adapters, the harness,
 // or CLI code, so it can be imported by offline tools, batch validators, or
 // other agents without pulling in any AI infrastructure.
+//
+// # Journal-entry immutability
+//
+// A JournalEntry, once posted, is immutable. Corrections do not edit or
+// delete the original; they post a new entry that reverses it (and, if
+// applicable, a second entry with the correct figures). This is a
+// double-entry-bookkeeping invariant, not a project convention: SOX,
+// GAAP, and IFRS all require a posted entry's audit trail to be
+// preserved verbatim, so erasing or rewriting history is non-compliant.
+//
+// As a direct consequence, this package exposes a single domain event
+// affecting entries: JournalPosted. There is intentionally no
+// JournalEdited and no JournalDeleted. Code that needs to express "this
+// entry was reversed by that one" must do so through entry-payload
+// relationships (e.g. a future reversed_by reference field), not by
+// mutating the original.
+//
+// This invariant also gives Entry.ID a clean meaning: it is assigned
+// once by the producing agent (see bookkeeper.Agent) as
+// FormatEntryID(repo.LastSequence(subject) + 1) just before Publish,
+// the transport carries it through the wire unchanged, and the broker's
+// optimistic-concurrency check rejects any racing producer that
+// proposed the same number. The ID then lives forever on the entry's
+// row because the entry itself never changes.
 package accounting
 
 import "time"
@@ -105,7 +129,10 @@ type JournalIntent struct {
 
 // JournalEntry is a posted (validated, sealed) accounting entry. The fields
 // are exported for serialization, but the ledger only exposes copies so
-// posted entries cannot be mutated through the ledger surface.
+// posted entries cannot be mutated through the ledger surface. The
+// stronger rule -- entries are immutable by accounting policy, not just
+// by API surface -- is documented in the package overview; corrections
+// go through new reversing entries, never through edits to this value.
 type JournalEntry struct {
 	ID          string        `json:"id"`
 	Date        time.Time     `json:"date"`
