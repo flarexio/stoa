@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"path/filepath"
 
 	"github.com/urfave/cli/v3"
 
@@ -15,8 +16,9 @@ import (
 	"github.com/flarexio/stoa/llm"
 	"github.com/flarexio/stoa/llm/openai"
 	"github.com/flarexio/stoa/messaging/inproc"
-	natsmsg "github.com/flarexio/stoa/messaging/nats"
 	"github.com/flarexio/stoa/persistence/memory"
+
+	natsmsg "github.com/flarexio/stoa/messaging/nats"
 	pgrepo "github.com/flarexio/stoa/persistence/postgres"
 )
 
@@ -40,12 +42,12 @@ func newBookRunCommand(stdout io.Writer) *cli.Command {
 		Usage:     "Run a bookkeeping reasoning loop against an accounting scenario JSON file.",
 		ArgsUsage: "<scenario.json>",
 		Description: "Loads an accounting scenario JSON file, seeds the configured repository,\n" +
-			"runs the bookkeeper.Agent loop, and prints a JSON report to stdout. With\n" +
-			"no --config flag the demo runs entirely in-process (memory + inproc bus).\n" +
-			"Pass --config to point at a config.yaml that selects persistence/postgres\n" +
-			"and/or messaging/nats backends. Use --engine scripted (default) for the\n" +
-			"deterministic offline reasoning engine, or --engine openai to drive a real\n" +
-			"LLM through the same harness; the openai engine needs OPENAI_API_KEY.",
+			"runs the bookkeeper.Agent loop, and prints a JSON report to stdout. The\n" +
+			"binary reads config.yaml from --work-dir, defaulting to ~/.flarex/stoa;\n" +
+			"the file must exist (no implicit in-process fallback). Use --engine\n" +
+			"scripted (default) for the deterministic offline reasoning engine, or\n" +
+			"--engine openai to drive a real LLM through the same harness; the openai\n" +
+			"engine needs OPENAI_API_KEY.",
 		Flags: []cli.Flag{
 			&cli.StringFlag{
 				Name:     "request",
@@ -77,8 +79,8 @@ func newBookRunCommand(stdout io.Writer) *cli.Command {
 				Value: 3,
 			},
 			&cli.StringFlag{
-				Name:  "config",
-				Usage: "path to config.yaml selecting persistence/messaging backends (defaults to memory + inproc)",
+				Name:  "work-dir",
+				Usage: "stoa work directory (holds config.yaml today, more state later); defaults to ~/.flarex/stoa",
 			},
 		},
 		Action: func(ctx context.Context, c *cli.Command) error {
@@ -98,9 +100,9 @@ func runBook(ctx context.Context, c *cli.Command, stdout io.Writer) error {
 	currency := c.String("currency")
 	maxTurns := int(c.Int("max-turns"))
 	model := c.String("model")
-	configPath := c.String("config")
+	workDir := c.String("work-dir")
 
-	cfg, err := loadBookConfig(configPath)
+	cfg, err := loadBookConfig(workDir)
 	if err != nil {
 		return err
 	}
@@ -167,16 +169,20 @@ func runBook(ctx context.Context, c *cli.Command, stdout io.Writer) error {
 	return runErr
 }
 
-// loadBookConfig returns the config to apply: when path is empty, the
-// in-process defaults; otherwise the parsed file.
-func loadBookConfig(path string) (*config.Config, error) {
-	if path == "" {
-		return &config.Config{
-			Persistence: config.Persistence{Kind: config.PersistenceMemory},
-			Messaging:   config.Messaging{Kind: config.MessagingInproc},
-		}, nil
+// loadBookConfig reads config.yaml from the given work directory. When
+// dir is empty it falls back to config.DefaultDir() (~/.flarex/stoa).
+// The file is required: a missing or unreadable config.yaml surfaces as
+// an error rather than silently degrading to in-process defaults, so a
+// misplaced config never gets papered over.
+func loadBookConfig(dir string) (*config.Config, error) {
+	if dir == "" {
+		def, err := config.DefaultDir()
+		if err != nil {
+			return nil, fmt.Errorf("book-run: %w", err)
+		}
+		dir = def
 	}
-	return config.Load(path)
+	return config.Load(filepath.Join(dir, config.Filename))
 }
 
 // buildRepository materialises the accounting.LedgerRepository chosen

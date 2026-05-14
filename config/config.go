@@ -12,10 +12,32 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"gopkg.in/yaml.v3"
 )
+
+// Filename is the fixed config file name the stoa CLI looks for inside
+// the work directory. Adapters and tooling that need to write or locate
+// the file should compose against this constant so the name stays
+// single-sourced.
+const Filename = "config.yaml"
+
+// DefaultDir returns the per-user work directory the stoa CLI uses when
+// --work-dir is not provided: ~/.flarex/stoa. The CLI reads config.yaml
+// from this directory today and may grow other per-user state
+// (credentials, cache, local sqlite, etc.) under the same root later,
+// which is why the name is "work" rather than "config". The directory
+// and the config.yaml inside it are both required at run time; callers
+// do not fall back to in-memory defaults when either is missing.
+func DefaultDir() (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("config: resolve home directory: %w", err)
+	}
+	return filepath.Join(home, ".flarex", "stoa"), nil
+}
 
 // PersistenceKind names a persistence backend the binary knows how to
 // wire. The empty string is treated as PersistenceMemory at validation

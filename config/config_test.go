@@ -114,3 +114,19 @@ func TestLoad_MissingFile(t *testing.T) {
 		t.Fatal("expected error for missing file")
 	}
 }
+
+func TestDefaultDir(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	got, err := config.DefaultDir()
+	if err != nil {
+		t.Fatalf("DefaultDir: %v", err)
+	}
+	want := filepath.Join(home, ".flarex", "stoa")
+	if got != want {
+		t.Errorf("DefaultDir: got %q, want %q", got, want)
+	}
+	if config.Filename != "config.yaml" {
+		t.Errorf("Filename: got %q, want %q", config.Filename, "config.yaml")
+	}
+}
