@@ -34,9 +34,9 @@ func TestEncodeEvent_OmitsSubjectAndSequence(t *testing.T) {
 	evt.Sequence = 42
 	evt.Entry.ID = "JE-0042" // should still be carried through since it's on Entry
 
-	body, err := EncodeEvent(evt)
+	body, err := encodeEvent(evt)
 	if err != nil {
-		t.Fatalf("EncodeEvent: %v", err)
+		t.Fatalf("encodeEvent: %v", err)
 	}
 
 	var raw map[string]json.RawMessage
@@ -56,18 +56,18 @@ func TestEncodeEvent_OmitsSubjectAndSequence(t *testing.T) {
 
 func TestDecodeEvent_StampsSubjectSequenceAndCarriesEntryID(t *testing.T) {
 	// Entry.ID is producer-assigned, so it travels through the wire as
-	// part of the JSON body; DecodeEvent stamps only the broker
+	// part of the JSON body; decodeEvent stamps only the broker
 	// metadata (Subject + Sequence).
 	in := sampleEvent()
 	in.Entry.ID = accounting.FormatEntryID(7)
 
-	body, err := EncodeEvent(in)
+	body, err := encodeEvent(in)
 	if err != nil {
-		t.Fatalf("EncodeEvent: %v", err)
+		t.Fatalf("encodeEvent: %v", err)
 	}
-	got, err := DecodeEvent(body, "accounting.journal", 7)
+	got, err := decodeEvent(body, "accounting.journal", 7)
 	if err != nil {
-		t.Fatalf("DecodeEvent: %v", err)
+		t.Fatalf("decodeEvent: %v", err)
 	}
 	if got.Subject != "accounting.journal" {
 		t.Errorf("subject: got %q", got.Subject)
@@ -90,7 +90,7 @@ func TestStampPubAck_StampsSubjectSequenceWithoutTouchingEntryID(t *testing.T) {
 	in := sampleEvent()
 	in.Entry.ID = accounting.FormatEntryID(99)
 
-	stamped := StampPubAck(in, "accounting.journal", 99)
+	stamped := stampPubAck(in, "accounting.journal", 99)
 	if stamped.Subject != "accounting.journal" || stamped.Sequence != 99 {
 		t.Errorf("metadata not stamped: %+v", stamped)
 	}
@@ -114,7 +114,7 @@ func TestIsWrongLastSequence(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := IsWrongLastSequence(tc.err); got != tc.want {
+			if got := isWrongLastSequence(tc.err); got != tc.want {
 				t.Errorf("want %v got %v", tc.want, got)
 			}
 		})
@@ -125,13 +125,13 @@ func TestEncodeDecode_RoundTripPreservesTags(t *testing.T) {
 	evt := sampleEvent()
 	evt.Entry.Lines[0].Dimensions.Tags = map[string]string{"project": "atlas"}
 
-	body, err := EncodeEvent(evt)
+	body, err := encodeEvent(evt)
 	if err != nil {
-		t.Fatalf("EncodeEvent: %v", err)
+		t.Fatalf("encodeEvent: %v", err)
 	}
-	got, err := DecodeEvent(body, "accounting.journal", 1)
+	got, err := decodeEvent(body, "accounting.journal", 1)
 	if err != nil {
-		t.Fatalf("DecodeEvent: %v", err)
+		t.Fatalf("decodeEvent: %v", err)
 	}
 	if got.Entry.Lines[0].Dimensions.Tags["project"] != "atlas" {
 		t.Errorf("tag round-trip lost: %+v", got.Entry.Lines[0].Dimensions.Tags)

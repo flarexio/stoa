@@ -60,11 +60,19 @@ stoa/
     agent_test.go
     integration_test.go
   persistence/
-    memory/             # In-memory repository (test + dev default)
+    memory/             # In-memory repositories (test + dev default)
+      memory.go         #   Package doc + any cross-domain helpers
+      accounting.go     #   NewAccountingRepository factory
     <backend>/          # Production repositories (e.g. persistence/postgres)
+      <backend>.go      #   Generic plumbing (pool, migrations, codec)
+      accounting.go     #   NewAccountingRepository factory
   messaging/
     inproc/             # In-process EventBus (test + dev default)
+      bus.go            #   Package doc
+      accounting.go     #   NewAccountingBus factory
     <transport>/        # Production transports (e.g. messaging/nats)
+      <transport>.go    #   Generic transport (connection, publish, drain)
+      accounting.go     #   NewAccountingBus factory + domain codec
   harness/
     loop/               # Typed reason-validate-execute runner
     validator/          # Shared validation helpers and LLM feedback formatting
@@ -83,6 +91,12 @@ Example: `icd/` defines ICD-10 `Note`, `Intent`, `Validator`, and the `Dictionar
 Outbound adapters -- persistence implementations, message-bus transports, HTTP clients, anything that pulls in an external SDK or network dependency -- do not live under the domain package. They go in the top-level `persistence/` and `messaging/` trees (or their own peer tree for a new category), each adapter in its own subpackage that imports the domain it implements but is not imported by it. For example, `accounting.LedgerRepository` is satisfied by `persistence/memory` (in-process default) and `persistence/postgres` (production, sqlc + pgx/v5); `bookkeeper.EventBus` (Publish + Subscribe + Close, defined alongside the agent in the use-case package because event delivery is orchestration rather than a business rule) is satisfied by `messaging/inproc` (in-process default) and `messaging/nats` (production, JetStream with `Nats-Expected-Last-Subject-Sequence` for optimistic concurrency). Both adapters return the interface from their constructors -- callers depend only on the abstraction. The composition edge -- `cmd/stoa` plus the `config` package -- picks which pair to wire at boot from a `config.yaml` (read from the stoa work directory selected by `--work-dir`, defaulting to `~/.flarex/stoa`; the file is required, no implicit in-process fallback). The domain remains stdlib-only.
 
 Trivial in-process defaults that exist only to make ports usable without infrastructure (an in-memory map satisfying a repository port, a synchronous fan-out satisfying a publisher port) still live in the outbound tree, not in the domain root -- this keeps `go doc <domain>` focused on entities, invariants, and ports, and gives every adapter the same shape regardless of how heavy it is.
+
+### Adapter convention: one file per domain
+
+Each adapter package (`messaging/inproc`, `messaging/nats`, `persistence/memory`, `persistence/postgres`) follows the same two-file convention: a generic core file containing transport-level plumbing that imports no domain package, plus one `<domain>.go` file per domain that ships the typed factory function `New{Domain}{Port}(...) → domain.Port`. Concrete adapter structs stay unexported -- the only thing crossing the package boundary is the factory function returning the port interface, so cmd-time wiring never depends on the concrete type. When a second domain needs the same transport, it adds a sibling `{domain}.go` file rather than touching the core or any existing factory.
+
+For genuinely thin adapters (`messaging/inproc`, `persistence/memory`), the "generic core" is just a package doc -- the in-process implementations are small enough that sharing infrastructure would cost more than it saves; each domain file owns its own state. For heavier adapters (`messaging/nats`, `persistence/postgres`), the core file holds the genuinely-shared plumbing: NATS connection / stream / consumer / drain lifecycle in the former, pgxpool plumbing in the latter.
 
 Feature-based organization does not mean dependency rules disappear. The direction still flows inward through interfaces: the agent depends on domain, never the reverse. Cross-feature contracts, such as `llm.ReasoningEngine[TIntent]`, may live in shared packages when they are intentionally reusable across agents.
 

@@ -13,13 +13,13 @@ import (
 // awsBillRepo seeds an in-memory LedgerRepository from the testdata
 // fixture: April 2026 is closed, May 2026 is open, one expense account
 // is inactive so the inactive-account rule has something to bite on.
-func awsBillRepo(t *testing.T) *memory.Repository {
+func awsBillRepo(t *testing.T) accounting.LedgerRepository {
 	t.Helper()
 	scenario, err := accounting.LoadScenarioFile("../testdata/accounting/aws_bill.json")
 	if err != nil {
 		t.Fatalf("load fixture: %v", err)
 	}
-	repo := memory.New()
+	repo := memory.NewAccountingRepository()
 	if err := scenario.Seed(context.Background(), repo); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
@@ -209,7 +209,7 @@ func TestScenarioLoader_SeedsRepository(t *testing.T) {
 	if scenario.Company.ID != "acme" {
 		t.Fatalf("unexpected company: %+v", scenario.Company)
 	}
-	repo := memory.New()
+	repo := memory.NewAccountingRepository()
 	if err := scenario.Seed(ctx, repo); err != nil {
 		t.Fatalf("seed: %v", err)
 	}

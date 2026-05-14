@@ -191,9 +191,9 @@ func loadBookConfig(dir string) (*config.Config, error) {
 func buildRepository(ctx context.Context, cfg config.Persistence) (accounting.LedgerRepository, io.Closer, error) {
 	switch cfg.Kind {
 	case config.PersistenceMemory:
-		return memory.New(), noopCloser{}, nil
+		return memory.NewAccountingRepository(), noopCloser{}, nil
 	case config.PersistencePostgres:
-		repo, closer, err := pgrepo.Connect(ctx, cfg.Postgres.DSN)
+		repo, closer, err := pgrepo.NewAccountingRepository(ctx, cfg.Postgres.DSN)
 		if err != nil {
 			return nil, nil, fmt.Errorf("book-run: postgres: %w", err)
 		}
@@ -225,9 +225,9 @@ func buildMessaging(ctx context.Context, cfg config.Messaging, repo accounting.L
 func openBus(ctx context.Context, cfg config.Messaging) (bookkeeper.EventBus, error) {
 	switch cfg.Kind {
 	case config.MessagingInproc:
-		return inproc.New(), nil
+		return inproc.NewAccountingBus(), nil
 	case config.MessagingNATS:
-		bus, err := natsmsg.Connect(ctx, natsmsg.Config{
+		bus, err := natsmsg.NewAccountingBus(ctx, natsmsg.Config{
 			URL:      cfg.NATS.URL,
 			Stream:   cfg.NATS.Stream,
 			Subject:  cfg.NATS.Subject,

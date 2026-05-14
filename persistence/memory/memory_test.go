@@ -30,7 +30,7 @@ func sampleEntry(id string, seq uint64) accounting.JournalPosted {
 
 func TestRepository_ApplyAndRead(t *testing.T) {
 	ctx := context.Background()
-	repo := memory.New()
+	repo := memory.NewAccountingRepository()
 	if err := repo.Apply(ctx, sampleEntry("JE-0001", 1)); err != nil {
 		t.Fatalf("apply: %v", err)
 	}
@@ -48,7 +48,7 @@ func TestRepository_ApplyAndRead(t *testing.T) {
 
 func TestRepository_AppliedEntryCannotBeMutatedThroughReturnedValue(t *testing.T) {
 	ctx := context.Background()
-	repo := memory.New()
+	repo := memory.NewAccountingRepository()
 	if err := repo.Apply(ctx, sampleEntry("JE-0001", 1)); err != nil {
 		t.Fatalf("apply: %v", err)
 	}
@@ -72,7 +72,7 @@ func TestRepository_AppliedEntryCannotBeMutatedThroughReturnedValue(t *testing.T
 
 func TestRepository_AppliedEntryIsolatedFromEventLines(t *testing.T) {
 	ctx := context.Background()
-	repo := memory.New()
+	repo := memory.NewAccountingRepository()
 	evt := sampleEntry("JE-0001", 1)
 	if err := repo.Apply(ctx, evt); err != nil {
 		t.Fatalf("apply: %v", err)
@@ -88,7 +88,7 @@ func TestRepository_AppliedEntryIsolatedFromEventLines(t *testing.T) {
 
 func TestRepository_LastSequenceTracksPerSubject(t *testing.T) {
 	ctx := context.Background()
-	repo := memory.New()
+	repo := memory.NewAccountingRepository()
 
 	if got, _ := repo.LastSequence(ctx, "accounting.journal"); got != 0 {
 		t.Fatalf("expected zero LastSequence before any apply, got %d", got)
@@ -112,7 +112,7 @@ func TestRepository_LastSequenceTracksPerSubject(t *testing.T) {
 
 func TestRepository_SeedAndListings(t *testing.T) {
 	ctx := context.Background()
-	repo := memory.New()
+	repo := memory.NewAccountingRepository()
 	scenario, err := accounting.LoadScenarioFile("../../testdata/accounting/aws_bill.json")
 	if err != nil {
 		t.Fatalf("load: %v", err)

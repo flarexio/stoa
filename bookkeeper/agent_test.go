@@ -20,13 +20,13 @@ func (f fakeEngineFunc) Predict(ctx context.Context, input llm.ReasoningInput) (
 }
 
 // awsBillRepo seeds an in-memory repository from the testdata fixture.
-func awsBillRepo(t *testing.T) *memory.Repository {
+func awsBillRepo(t *testing.T) accounting.LedgerRepository {
 	t.Helper()
 	scenario, err := accounting.LoadScenarioFile("../testdata/accounting/aws_bill.json")
 	if err != nil {
 		t.Fatalf("load fixture: %v", err)
 	}
-	repo := memory.New()
+	repo := memory.NewAccountingRepository()
 	if err := scenario.Seed(context.Background(), repo); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
@@ -36,13 +36,13 @@ func awsBillRepo(t *testing.T) *memory.Repository {
 // awsBillScenario returns the scenario alongside a seeded repository so
 // tests that need scenario.Company (the prompt renderer tests) do not
 // have to reload the file.
-func awsBillScenario(t *testing.T) (accounting.Scenario, *memory.Repository) {
+func awsBillScenario(t *testing.T) (accounting.Scenario, accounting.LedgerRepository) {
 	t.Helper()
 	scenario, err := accounting.LoadScenarioFile("../testdata/accounting/aws_bill.json")
 	if err != nil {
 		t.Fatalf("load fixture: %v", err)
 	}
-	repo := memory.New()
+	repo := memory.NewAccountingRepository()
 	if err := scenario.Seed(context.Background(), repo); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
@@ -52,9 +52,9 @@ func awsBillScenario(t *testing.T) (accounting.Scenario, *memory.Repository) {
 // wireBus subscribes the standard apply handler so the bus's published
 // events land in the repo's projection. Returned as a convenience for
 // test setup.
-func wireBus(t *testing.T, repo *memory.Repository) bookkeeper.EventBus {
+func wireBus(t *testing.T, repo accounting.LedgerRepository) bookkeeper.EventBus {
 	t.Helper()
-	bus := inproc.New()
+	bus := inproc.NewAccountingBus()
 	if err := bus.Subscribe(bookkeeper.EventHandlerFunc(func(ctx context.Context, evt accounting.JournalPosted) error {
 		return repo.Apply(ctx, evt)
 	})); err != nil {
@@ -254,7 +254,7 @@ func TestAgent_MissingEngine(t *testing.T) {
 }
 
 func TestAgent_MissingRepo(t *testing.T) {
-	bus := inproc.New()
+	bus := inproc.NewAccountingBus()
 	engine := fakeEngineFunc(func(_ context.Context, _ llm.ReasoningInput) (llm.ReasoningResult[accounting.JournalIntent], error) {
 		return llm.ReasoningResult[accounting.JournalIntent]{}, nil
 	})
