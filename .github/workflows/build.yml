@@ -24,7 +24,7 @@ jobs:
         run: go test -v ./...
 
       - name: Code Review with Claude
-        if: github.event_name == 'pull_request'
+        if: github.event_name == 'pull_request' && !github.event.pull_request.draft
         uses: flarexio/claude-runner@v1
         with:
           prompt: |
@@ -43,7 +43,7 @@ jobs:
           output-file: claude-output.md
 
       - name: Add Claude review to summary
-        if: always() && github.event_name == 'pull_request'
+        if: always() && github.event_name == 'pull_request' && !github.event.pull_request.draft
         run: |
           if [ -f claude-output.md ]; then
             echo "# Claude Review" >> "$GITHUB_STEP_SUMMARY"
