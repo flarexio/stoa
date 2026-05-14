@@ -25,19 +25,24 @@ import (
 // from JSON because broker metadata, not the body, is authoritative:
 // the inproc bus assigns them under its mutex, and the NATS adapter
 // recovers them from PubAck and the consumer's message metadata.
-// Entry.ID is derived from Sequence via FormatEntryID before any
-// handler receives the event, so handlers can rely on Entry.ID being
-// populated even though it is empty on the wire.
+// Entry.ID, by contrast, is producer-assigned: the bookkeeper agent
+// picks it as FormatEntryID(lastSeq+1) before Publish is called, the
+// transport carries it through the wire unchanged, and the consumer
+// reads the same identifier the producer wrote. Optimistic concurrency
+// at the broker keeps the chosen ID race-safe -- a stale lastSeq is
+// rejected as ErrConcurrentUpdate before any duplicate ID can land.
 type JournalPosted struct {
 	Subject  string       `json:"-"`
 	Sequence uint64       `json:"-"`
 	Entry    JournalEntry `json:"entry"`
 }
 
-// FormatEntryID maps a broker sequence to the canonical JournalEntry.ID
-// used by the bookkeeper agent and stored in every projection. Producers
-// and consumers apply this function independently so both sides converge
-// on the same identifier without coordinating.
+// FormatEntryID formats a dense per-subject counter into the canonical
+// JournalEntry.ID. The bookkeeper agent calls it with
+// LastSequence(subject)+1 right before publishing, which equals the
+// broker sequence the publish will receive on success (optimistic
+// concurrency guarantees the prediction). The function itself stays
+// purely formatting so it remains safe for any layer to reuse.
 func FormatEntryID(seq uint64) string {
 	return fmt.Sprintf("JE-%04d", seq)
 }

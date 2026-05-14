@@ -24,10 +24,13 @@
 // relationships (e.g. a future reversed_by reference field), not by
 // mutating the original.
 //
-// This invariant also keeps the broker-sequence -> Entry.ID derivation
-// (see FormatEntryID) safe to treat as a permanent aggregate identifier:
-// an entry's ID never changes after creation because the entry itself
-// never changes.
+// This invariant also gives Entry.ID a clean meaning: it is assigned
+// once by the producing agent (see bookkeeper.Agent) as
+// FormatEntryID(repo.LastSequence(subject) + 1) just before Publish,
+// the transport carries it through the wire unchanged, and the broker's
+// optimistic-concurrency check rejects any racing producer that
+// proposed the same number. The ID then lives forever on the entry's
+// row because the entry itself never changes.
 package accounting
 
 import "time"

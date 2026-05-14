@@ -27,7 +27,7 @@ func sampleEvent() accounting.JournalPosted {
 	}
 }
 
-func TestBus_PublishStampsSubjectSequenceAndID(t *testing.T) {
+func TestBus_PublishStampsSubjectAndSequenceAndCarriesEntryID(t *testing.T) {
 	ctx := context.Background()
 	bus := inproc.New()
 
@@ -37,7 +37,13 @@ func TestBus_PublishStampsSubjectSequenceAndID(t *testing.T) {
 		return nil
 	}))
 
-	dispatched, err := bus.Publish(ctx, sampleEvent(), accounting.ExpectedSequence{Subject: "accounting.journal", LastSeq: 0})
+	// Entry.ID is producer-assigned (the agent picks FormatEntryID(lastSeq+1)
+	// before publishing). The bus only stamps Subject and Sequence -- it
+	// must carry the producer's ID through to handlers unchanged.
+	in := sampleEvent()
+	in.Entry.ID = accounting.FormatEntryID(1)
+
+	dispatched, err := bus.Publish(ctx, in, accounting.ExpectedSequence{Subject: "accounting.journal", LastSeq: 0})
 	if err != nil {
 		t.Fatalf("publish: %v", err)
 	}
@@ -48,15 +54,15 @@ func TestBus_PublishStampsSubjectSequenceAndID(t *testing.T) {
 	if dispatched.Sequence != 1 {
 		t.Fatalf("expected Sequence=1, got %d", dispatched.Sequence)
 	}
-	if dispatched.Entry.ID != accounting.FormatEntryID(1) {
-		t.Fatalf("expected Entry.ID=%q, got %q", accounting.FormatEntryID(1), dispatched.Entry.ID)
+	if dispatched.Entry.ID != in.Entry.ID {
+		t.Fatalf("expected Entry.ID preserved (%q), got %q", in.Entry.ID, dispatched.Entry.ID)
 	}
 
 	if len(observed) != 1 {
 		t.Fatalf("expected one handler call, got %d", len(observed))
 	}
-	if observed[0].Entry.ID != dispatched.Entry.ID {
-		t.Fatalf("handler saw different ID than dispatched: %q vs %q", observed[0].Entry.ID, dispatched.Entry.ID)
+	if observed[0].Entry.ID != in.Entry.ID {
+		t.Fatalf("handler saw different ID than producer set: %q vs %q", observed[0].Entry.ID, in.Entry.ID)
 	}
 }
 
@@ -107,11 +113,13 @@ func TestBus_DispatchIsSerializedAcrossSubscribers(t *testing.T) {
 		return nil
 	}))
 
-	if _, err := bus.Publish(ctx, sampleEvent(), accounting.ExpectedSequence{}); err != nil {
+	in := sampleEvent()
+	in.Entry.ID = accounting.FormatEntryID(1)
+	if _, err := bus.Publish(ctx, in, accounting.ExpectedSequence{}); err != nil {
 		t.Fatal(err)
 	}
 
-	if len(order) != 2 || order[0] != "a:"+accounting.FormatEntryID(1) || order[1] != "b:"+accounting.FormatEntryID(1) {
+	if len(order) != 2 || order[0] != "a:"+in.Entry.ID || order[1] != "b:"+in.Entry.ID {
 		t.Fatalf("unexpected dispatch order: %v", order)
 	}
 }

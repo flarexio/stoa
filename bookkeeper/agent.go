@@ -78,12 +78,25 @@ func (a Agent) Book(ctx context.Context, request string) (Result, error) {
 
 	var posted accounting.JournalEntry
 	executor := loop.ExecutorFunc[accounting.JournalIntent](func(ctx context.Context, intent accounting.JournalIntent) (llm.Observation, error) {
+		// lastSeq is read here both as the broker's optimistic-concurrency
+		// expectation and as the dense counter for the entry's identity:
+		// because Apply writes the entry row and bumps subject_offsets in
+		// the same transaction, MAX(sequence) and last_sequence are
+		// guaranteed equal, and lastSeq+1 is the sequence the broker
+		// will assign on a successful publish. The agent therefore picks
+		// the entry's ID right here, before publishing, and the
+		// transport carries the ID through the wire unchanged. If
+		// another producer wins the race the broker rejects this
+		// publish with accounting.ErrConcurrentUpdate, the loop retries
+		// with a freshly read lastSeq, and a new ID is assigned -- no
+		// duplicate entry can take this ID because the publish failed.
 		lastSeq, err := a.Repo.LastSequence(ctx, subject)
 		if err != nil {
 			return llm.Observation{}, fmt.Errorf("bookkeeper: read last sequence: %w", err)
 		}
 
 		entry := accounting.JournalEntry{
+			ID:          accounting.FormatEntryID(lastSeq + 1),
 			Date:        intent.Date,
 			PeriodID:    intent.PeriodID,
 			Currency:    intent.Currency,
