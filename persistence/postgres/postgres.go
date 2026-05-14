@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -46,9 +47,12 @@ func New(pool *pgxpool.Pool) *Repository {
 	}
 }
 
-// Connect opens a pgxpool.Pool from dsn and returns a Repository wired
-// to it together with the pool itself so the caller can defer Close.
-func Connect(ctx context.Context, dsn string) (*Repository, *pgxpool.Pool, error) {
+// Connect opens a pgxpool.Pool from dsn and returns the
+// accounting.LedgerRepository it backs alongside an io.Closer the
+// caller defers to release the pool. Returning the port interface
+// instead of *Repository keeps the concrete adapter hidden so cmd-time
+// wiring depends only on the abstraction.
+func Connect(ctx context.Context, dsn string) (accounting.LedgerRepository, io.Closer, error) {
 	pool, err := pgxpool.New(ctx, dsn)
 	if err != nil {
 		return nil, nil, fmt.Errorf("postgres: connect: %w", err)
@@ -57,7 +61,18 @@ func Connect(ctx context.Context, dsn string) (*Repository, *pgxpool.Pool, error
 		pool.Close()
 		return nil, nil, fmt.Errorf("postgres: ping: %w", err)
 	}
-	return New(pool), pool, nil
+	return New(pool), poolCloser{pool: pool}, nil
+}
+
+// poolCloser adapts *pgxpool.Pool to io.Closer; pgxpool.Pool.Close
+// returns no error, so we report nil unconditionally.
+type poolCloser struct {
+	pool *pgxpool.Pool
+}
+
+func (c poolCloser) Close() error {
+	c.pool.Close()
+	return nil
 }
 
 // --- point reads ---

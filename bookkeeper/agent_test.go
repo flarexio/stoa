@@ -52,11 +52,14 @@ func awsBillScenario(t *testing.T) (accounting.Scenario, *memory.Repository) {
 // wireBus subscribes the standard apply handler so the bus's published
 // events land in the repo's projection. Returned as a convenience for
 // test setup.
-func wireBus(repo *memory.Repository) *inproc.Bus {
+func wireBus(t *testing.T, repo *memory.Repository) bookkeeper.EventBus {
+	t.Helper()
 	bus := inproc.New()
-	bus.Subscribe(bookkeeper.EventHandlerFunc(func(ctx context.Context, evt accounting.JournalPosted) error {
+	if err := bus.Subscribe(bookkeeper.EventHandlerFunc(func(ctx context.Context, evt accounting.JournalPosted) error {
 		return repo.Apply(ctx, evt)
-	}))
+	})); err != nil {
+		t.Fatalf("subscribe: %v", err)
+	}
 	return bus
 }
 
@@ -79,7 +82,7 @@ func fixedClock() time.Time {
 
 func TestAgent_PostsBalancedJournal(t *testing.T) {
 	repo := awsBillRepo(t)
-	bus := wireBus(repo)
+	bus := wireBus(t, repo)
 
 	engine := fakeEngineFunc(func(_ context.Context, _ llm.ReasoningInput) (llm.ReasoningResult[accounting.JournalIntent], error) {
 		return llm.ReasoningResult[accounting.JournalIntent]{
@@ -119,7 +122,7 @@ func TestAgent_PostsBalancedJournal(t *testing.T) {
 
 func TestAgent_CorrectsAfterValidationFeedback(t *testing.T) {
 	repo := awsBillRepo(t)
-	bus := wireBus(repo)
+	bus := wireBus(t, repo)
 
 	calls := 0
 	engine := fakeEngineFunc(func(_ context.Context, input llm.ReasoningInput) (llm.ReasoningResult[accounting.JournalIntent], error) {
@@ -168,7 +171,7 @@ func TestAgent_CorrectsAfterValidationFeedback(t *testing.T) {
 
 func TestAgent_RejectsClosedPeriodIntent(t *testing.T) {
 	repo := awsBillRepo(t)
-	bus := wireBus(repo)
+	bus := wireBus(t, repo)
 
 	calls := 0
 	engine := fakeEngineFunc(func(_ context.Context, _ llm.ReasoningInput) (llm.ReasoningResult[accounting.JournalIntent], error) {
@@ -195,7 +198,7 @@ func TestAgent_RejectsClosedPeriodIntent(t *testing.T) {
 
 func TestAgent_SequentialIDsAcrossPosts(t *testing.T) {
 	repo := awsBillRepo(t)
-	bus := wireBus(repo)
+	bus := wireBus(t, repo)
 
 	engine := fakeEngineFunc(func(_ context.Context, _ llm.ReasoningInput) (llm.ReasoningResult[accounting.JournalIntent], error) {
 		return llm.ReasoningResult[accounting.JournalIntent]{Intent: balancedAWSIntent()}, nil
@@ -218,7 +221,7 @@ func TestAgent_SequentialIDsAcrossPosts(t *testing.T) {
 func TestAgent_ClosedPeriodMidSessionBlocksFurtherPosts(t *testing.T) {
 	ctx := context.Background()
 	repo := awsBillRepo(t)
-	bus := wireBus(repo)
+	bus := wireBus(t, repo)
 
 	engine := fakeEngineFunc(func(_ context.Context, _ llm.ReasoningInput) (llm.ReasoningResult[accounting.JournalIntent], error) {
 		return llm.ReasoningResult[accounting.JournalIntent]{Intent: balancedAWSIntent()}, nil
@@ -243,7 +246,7 @@ func TestAgent_ClosedPeriodMidSessionBlocksFurtherPosts(t *testing.T) {
 
 func TestAgent_MissingEngine(t *testing.T) {
 	repo := awsBillRepo(t)
-	bus := wireBus(repo)
+	bus := wireBus(t, repo)
 	agent := bookkeeper.Agent{Repo: repo, Publisher: bus}
 	if _, err := agent.Book(context.Background(), "x"); err == nil {
 		t.Fatal("expected error for missing engine")

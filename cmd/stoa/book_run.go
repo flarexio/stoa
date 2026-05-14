@@ -112,11 +112,11 @@ func runBook(ctx context.Context, c *cli.Command, stdout io.Writer) error {
 		return err
 	}
 
-	repo, repoClose, err := buildRepository(ctx, cfg.Persistence)
+	repo, repoCloser, err := buildRepository(ctx, cfg.Persistence)
 	if err != nil {
 		return err
 	}
-	defer repoClose()
+	defer repoCloser.Close()
 
 	if err := scenario.Seed(ctx, repo); err != nil {
 		return err
@@ -130,11 +130,11 @@ func runBook(ctx context.Context, c *cli.Command, stdout io.Writer) error {
 		return errors.New("book-run: scenario has no open period")
 	}
 
-	publisher, busClose, err := buildMessaging(ctx, cfg.Messaging, repo)
+	bus, err := buildMessaging(ctx, cfg.Messaging, repo)
 	if err != nil {
 		return err
 	}
-	defer busClose()
+	defer bus.Close()
 
 	engine, err := buildBookEngine(ctx, engineKind, scenario, repo, amount, currency, model)
 	if err != nil {
@@ -143,7 +143,7 @@ func runBook(ctx context.Context, c *cli.Command, stdout io.Writer) error {
 	agent := bookkeeper.Agent{
 		Engine:    engine,
 		Repo:      repo,
-		Publisher: publisher,
+		Publisher: bus,
 		MaxTurns:  maxTurns,
 	}
 
@@ -186,64 +186,67 @@ func loadBookConfig(dir string) (*config.Config, error) {
 }
 
 // buildRepository materialises the accounting.LedgerRepository chosen
-// by cfg. The returned close func is always safe to call (it is a no-op
-// for the memory backend).
-func buildRepository(ctx context.Context, cfg config.Persistence) (accounting.LedgerRepository, func(), error) {
+// by cfg. The returned io.Closer is always safe to call; the memory
+// backend supplies a no-op closer so callers do not have to branch.
+func buildRepository(ctx context.Context, cfg config.Persistence) (accounting.LedgerRepository, io.Closer, error) {
 	switch cfg.Kind {
-	case config.PersistenceMemory, "":
-		return memory.New(), func() {}, nil
+	case config.PersistenceMemory:
+		return memory.New(), noopCloser{}, nil
 	case config.PersistencePostgres:
-		repo, pool, err := pgrepo.Connect(ctx, cfg.Postgres.DSN)
+		repo, closer, err := pgrepo.Connect(ctx, cfg.Postgres.DSN)
 		if err != nil {
 			return nil, nil, fmt.Errorf("book-run: postgres: %w", err)
 		}
-		return repo, func() { pool.Close() }, nil
+		return repo, closer, nil
 	default:
 		return nil, nil, fmt.Errorf("book-run: unsupported persistence kind %q", cfg.Kind)
 	}
 }
 
-// buildMessaging materialises the bookkeeper.EventPublisher chosen by
-// cfg and subscribes a single handler that applies events to repo. The
-// returned close func tears down whichever transport was opened.
-func buildMessaging(ctx context.Context, cfg config.Messaging, repo accounting.LedgerRepository) (bookkeeper.EventPublisher, func(), error) {
+// buildMessaging materialises the bookkeeper.EventBus chosen by cfg and
+// subscribes a single handler that applies events to repo. The bus's
+// Close method tears down whichever transport was opened.
+func buildMessaging(ctx context.Context, cfg config.Messaging, repo accounting.LedgerRepository) (bookkeeper.EventBus, error) {
+	bus, err := openBus(ctx, cfg)
+	if err != nil {
+		return nil, err
+	}
 	apply := bookkeeper.EventHandlerFunc(func(ctx context.Context, evt accounting.JournalPosted) error {
 		return repo.Apply(ctx, evt)
 	})
+	if err := bus.Subscribe(apply); err != nil {
+		_ = bus.Close()
+		return nil, fmt.Errorf("book-run: subscribe: %w", err)
+	}
+	return bus, nil
+}
 
+// openBus opens the EventBus chosen by cfg without subscribing yet.
+func openBus(ctx context.Context, cfg config.Messaging) (bookkeeper.EventBus, error) {
 	switch cfg.Kind {
-	case config.MessagingInproc, "":
-		bus := inproc.New()
-		bus.Subscribe(apply)
-		return bus, func() {}, nil
+	case config.MessagingInproc:
+		return inproc.New(), nil
 	case config.MessagingNATS:
-		conn, err := natsmsg.Connect(ctx, natsmsg.Config{
+		bus, err := natsmsg.Connect(ctx, natsmsg.Config{
 			URL:      cfg.NATS.URL,
 			Stream:   cfg.NATS.Stream,
 			Subject:  cfg.NATS.Subject,
 			Consumer: cfg.NATS.Consumer,
 		})
 		if err != nil {
-			return nil, nil, fmt.Errorf("book-run: nats: %w", err)
+			return nil, fmt.Errorf("book-run: nats: %w", err)
 		}
-		cons, err := conn.Consumer(ctx)
-		if err != nil {
-			conn.Close()
-			return nil, nil, fmt.Errorf("book-run: nats consumer: %w", err)
-		}
-		if err := cons.Subscribe(ctx, apply); err != nil {
-			cons.Close()
-			conn.Close()
-			return nil, nil, fmt.Errorf("book-run: nats subscribe: %w", err)
-		}
-		return conn.Publisher(), func() {
-			cons.Close()
-			conn.Close()
-		}, nil
+		return bus, nil
 	default:
-		return nil, nil, fmt.Errorf("book-run: unsupported messaging kind %q", cfg.Kind)
+		return nil, fmt.Errorf("book-run: unsupported messaging kind %q", cfg.Kind)
 	}
 }
+
+// noopCloser satisfies io.Closer for adapters that own no external
+// resources (the in-memory repository).
+type noopCloser struct{}
+
+func (noopCloser) Close() error { return nil }
 
 // buildBookEngine selects the reasoning engine the CLI feeds to the
 // bookkeeper agent. The scripted engine is offline and deterministic; the

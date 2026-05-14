@@ -2,6 +2,7 @@ package bookkeeper
 
 import (
 	"context"
+	"io"
 
 	"github.com/flarexio/stoa/accounting"
 )
@@ -37,4 +38,26 @@ type EventHandlerFunc func(ctx context.Context, evt accounting.JournalPosted) er
 // Handle satisfies EventHandler.
 func (f EventHandlerFunc) Handle(ctx context.Context, evt accounting.JournalPosted) error {
 	return f(ctx, evt)
+}
+
+// EventSubscriber registers a handler with an event transport. The
+// transport owns per-message context derivation, ack/nak semantics, and
+// concurrency: callers hand off a handler and let the transport decide
+// when and with what context to invoke it. Subscribe returns when the
+// subscription is active; tearing it down goes through io.Closer on the
+// transport (typically the same value that implements EventBus).
+type EventSubscriber interface {
+	Subscribe(handler EventHandler) error
+}
+
+// EventBus is the bidirectional transport contract used by the
+// bookkeeping flow: publish events out, register handlers to consume
+// events back, and close the underlying transport when done. Adapters
+// (messaging/inproc, messaging/nats) expose only this interface from
+// their constructors so callers operate on abstractions and never
+// touch concrete transport types.
+type EventBus interface {
+	EventPublisher
+	EventSubscriber
+	io.Closer
 }
