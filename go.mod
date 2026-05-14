@@ -5,6 +5,7 @@ go 1.25.3
 require (
 	github.com/openai/openai-go v1.12.0
 	github.com/urfave/cli/v3 v3.8.0
+	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (
