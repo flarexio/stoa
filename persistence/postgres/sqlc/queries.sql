@@ -73,14 +73,21 @@ WHERE entry_id = ANY($1::text[])
 ORDER BY entry_id, line_no;
 
 -- name: InsertEntry :exec
+-- Idempotent: NATS JetStream redelivers on consumer crash after commit but
+-- before Ack; a duplicate INSERT would loop forever as Nak'd unique-key
+-- violations. Entry.ID is derived from the broker sequence so duplicates
+-- collapse to the same row.
 INSERT INTO journal_entries (
     id, sequence, subject, entry_date, period_id, currency, description, posted_at
-) VALUES ($1, $2, $3, $4, $5, $6, $7, $8);
+) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+ON CONFLICT (id) DO NOTHING;
 
 -- name: InsertLine :exec
+-- Idempotent for the same reason as InsertEntry.
 INSERT INTO journal_lines (
     entry_id, line_no, account_code, side, amount, memo, branch_id, tags
-) VALUES ($1, $2, $3, $4, $5, $6, $7, $8);
+) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+ON CONFLICT (entry_id, line_no) DO NOTHING;
 
 -- name: GetLastSequence :one
 SELECT last_sequence FROM subject_offsets WHERE subject = $1;

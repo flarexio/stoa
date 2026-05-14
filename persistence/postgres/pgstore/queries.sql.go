@@ -97,6 +97,7 @@ const insertEntry = `-- name: InsertEntry :exec
 INSERT INTO journal_entries (
     id, sequence, subject, entry_date, period_id, currency, description, posted_at
 ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+ON CONFLICT (id) DO NOTHING
 `
 
 type InsertEntryParams struct {
@@ -110,6 +111,10 @@ type InsertEntryParams struct {
 	PostedAt    pgtype.Timestamptz
 }
 
+// Idempotent: NATS JetStream redelivers on consumer crash after commit but
+// before Ack; a duplicate INSERT would loop forever as Nak'd unique-key
+// violations. Entry.ID is derived from the broker sequence so duplicates
+// collapse to the same row.
 func (q *Queries) InsertEntry(ctx context.Context, arg InsertEntryParams) error {
 	_, err := q.db.Exec(ctx, insertEntry,
 		arg.ID,
@@ -128,6 +133,7 @@ const insertLine = `-- name: InsertLine :exec
 INSERT INTO journal_lines (
     entry_id, line_no, account_code, side, amount, memo, branch_id, tags
 ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+ON CONFLICT (entry_id, line_no) DO NOTHING
 `
 
 type InsertLineParams struct {
@@ -141,6 +147,7 @@ type InsertLineParams struct {
 	Tags        []byte
 }
 
+// Idempotent for the same reason as InsertEntry.
 func (q *Queries) InsertLine(ctx context.Context, arg InsertLineParams) error {
 	_, err := q.db.Exec(ctx, insertLine,
 		arg.EntryID,

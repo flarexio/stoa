@@ -14,7 +14,12 @@ type Querier interface {
 	GetEntry(ctx context.Context, id string) (JournalEntry, error)
 	GetLastSequence(ctx context.Context, subject string) (int64, error)
 	GetPeriod(ctx context.Context, id string) (Period, error)
+	// Idempotent: NATS JetStream redelivers on consumer crash after commit but
+	// before Ack; a duplicate INSERT would loop forever as Nak'd unique-key
+	// violations. Entry.ID is derived from the broker sequence so duplicates
+	// collapse to the same row.
 	InsertEntry(ctx context.Context, arg InsertEntryParams) error
+	// Idempotent for the same reason as InsertEntry.
 	InsertLine(ctx context.Context, arg InsertLineParams) error
 	ListAccounts(ctx context.Context) ([]Account, error)
 	ListBranches(ctx context.Context) ([]Branch, error)
