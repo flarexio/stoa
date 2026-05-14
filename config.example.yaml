@@ -1,0 +1,21 @@
+# Sample stoa configuration. Copy to config.yaml (gitignored) and edit
+# the values for your environment. Both blocks default to the in-process
+# backends, so an empty file is also valid -- delete a block to use the
+# default.
+
+persistence:
+  # memory  -> persistence/memory; nothing else needed.
+  # postgres -> persistence/postgres; requires the nested postgres block.
+  kind: postgres
+  postgres:
+    dsn: postgres://stoa:stoa@localhost:5432/stoa?sslmode=disable
+
+messaging:
+  # inproc -> messaging/inproc; nothing else needed.
+  # nats   -> messaging/nats; requires url + stream + subject.
+  kind: nats
+  nats:
+    url: nats://localhost:4222
+    stream: STOA_ACCOUNTING
+    subject: accounting.journal
+    consumer: stoa-book-run

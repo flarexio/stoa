@@ -25,7 +25,7 @@ func TestAgent_OpenAI(t *testing.T) {
 	}
 
 	scenario, repo := awsBillScenario(t)
-	bus := wireBus(repo)
+	bus := wireBus(t, repo)
 
 	renderer, err := bookkeeper.NewPromptRenderer(context.Background(), scenario.Company, repo)
 	if err != nil {

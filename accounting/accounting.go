@@ -115,23 +115,3 @@ type JournalEntry struct {
 	Lines       []JournalLine `json:"lines"`
 	PostedAt    time.Time     `json:"posted_at"`
 }
-
-// cloneLines returns an independent copy of lines so callers cannot mutate
-// the ledger's stored state through a returned entry.
-func cloneLines(in []JournalLine) []JournalLine {
-	if in == nil {
-		return nil
-	}
-	out := make([]JournalLine, len(in))
-	for i, l := range in {
-		out[i] = l
-		if l.Dimensions.Tags != nil {
-			tags := make(map[string]string, len(l.Dimensions.Tags))
-			for k, v := range l.Dimensions.Tags {
-				tags[k] = v
-			}
-			out[i].Dimensions.Tags = tags
-		}
-	}
-	return out
-}

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/flarexio/stoa/accounting"
+	"github.com/flarexio/stoa/bookkeeper"
 	"github.com/flarexio/stoa/messaging/inproc"
 )
 
@@ -31,7 +32,7 @@ func TestBus_PublishStampsSubjectSequenceAndID(t *testing.T) {
 	bus := inproc.New()
 
 	var observed []accounting.JournalPosted
-	bus.Subscribe(accounting.EventHandlerFunc(func(_ context.Context, evt accounting.JournalPosted) error {
+	bus.Subscribe(bookkeeper.EventHandlerFunc(func(_ context.Context, evt accounting.JournalPosted) error {
 		observed = append(observed, evt)
 		return nil
 	}))
@@ -93,13 +94,13 @@ func TestBus_DispatchIsSerializedAcrossSubscribers(t *testing.T) {
 		mu    sync.Mutex
 		order []string
 	)
-	bus.Subscribe(accounting.EventHandlerFunc(func(_ context.Context, evt accounting.JournalPosted) error {
+	bus.Subscribe(bookkeeper.EventHandlerFunc(func(_ context.Context, evt accounting.JournalPosted) error {
 		mu.Lock()
 		order = append(order, "a:"+evt.Entry.ID)
 		mu.Unlock()
 		return nil
 	}))
-	bus.Subscribe(accounting.EventHandlerFunc(func(_ context.Context, evt accounting.JournalPosted) error {
+	bus.Subscribe(bookkeeper.EventHandlerFunc(func(_ context.Context, evt accounting.JournalPosted) error {
 		mu.Lock()
 		order = append(order, "b:"+evt.Entry.ID)
 		mu.Unlock()
@@ -120,7 +121,7 @@ func TestBus_HandlerErrorPropagates(t *testing.T) {
 	bus := inproc.New()
 
 	want := errors.New("boom")
-	bus.Subscribe(accounting.EventHandlerFunc(func(_ context.Context, _ accounting.JournalPosted) error {
+	bus.Subscribe(bookkeeper.EventHandlerFunc(func(_ context.Context, _ accounting.JournalPosted) error {
 		return want
 	}))
 

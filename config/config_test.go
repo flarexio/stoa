@@ -1,0 +1,132 @@
+package config_test
+
+import (
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"github.com/flarexio/stoa/config"
+)
+
+func writeConfig(t *testing.T, body string) string {
+	t.Helper()
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.yaml")
+	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+	return path
+}
+
+func TestLoad_EmptyFileDefaultsToInProcess(t *testing.T) {
+	path := writeConfig(t, "")
+	cfg, err := config.Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.Persistence.Kind != config.PersistenceMemory {
+		t.Errorf("persistence default: want memory, got %q", cfg.Persistence.Kind)
+	}
+	if cfg.Messaging.Kind != config.MessagingInproc {
+		t.Errorf("messaging default: want inproc, got %q", cfg.Messaging.Kind)
+	}
+}
+
+func TestLoad_PostgresRequiresDSN(t *testing.T) {
+	path := writeConfig(t, "persistence:\n  kind: postgres\n")
+	_, err := config.Load(path)
+	if err == nil {
+		t.Fatal("expected error when postgres.dsn is missing")
+	}
+	if !strings.Contains(err.Error(), "persistence.postgres.dsn") {
+		t.Errorf("error should name the missing field, got %v", err)
+	}
+}
+
+func TestLoad_NATSRequiresURLStreamSubject(t *testing.T) {
+	path := writeConfig(t, "messaging:\n  kind: nats\n")
+	_, err := config.Load(path)
+	if err == nil {
+		t.Fatal("expected error when nats block is empty")
+	}
+	for _, want := range []string{"messaging.nats.url", "messaging.nats.stream", "messaging.nats.subject"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error should mention %q, got %v", want, err)
+		}
+	}
+}
+
+func TestLoad_UnknownKindRejected(t *testing.T) {
+	path := writeConfig(t, "persistence:\n  kind: mongodb\n")
+	_, err := config.Load(path)
+	if err == nil {
+		t.Fatal("expected error for unsupported persistence kind")
+	}
+	if !strings.Contains(err.Error(), "mongodb") {
+		t.Errorf("error should name the bad kind, got %v", err)
+	}
+}
+
+func TestLoad_UnknownFieldRejected(t *testing.T) {
+	path := writeConfig(t, "persistence:\n  kind: memory\n  redis:\n    addr: localhost:6379\n")
+	_, err := config.Load(path)
+	if err == nil {
+		t.Fatal("expected error for unknown top-level field under persistence")
+	}
+	if !strings.Contains(err.Error(), "redis") {
+		t.Errorf("error should reject unknown field 'redis', got %v", err)
+	}
+}
+
+func TestLoad_FullPostgresAndNATS(t *testing.T) {
+	body := `persistence:
+  kind: postgres
+  postgres:
+    dsn: postgres://stoa@localhost:5432/stoa?sslmode=disable
+messaging:
+  kind: nats
+  nats:
+    url: nats://localhost:4222
+    stream: STOA_ACCOUNTING
+    subject: accounting.journal
+    consumer: stoa-book-run
+`
+	path := writeConfig(t, body)
+	cfg, err := config.Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.Persistence.Postgres.DSN == "" {
+		t.Error("DSN should be parsed")
+	}
+	if cfg.Messaging.NATS.Stream != "STOA_ACCOUNTING" {
+		t.Errorf("stream: got %q", cfg.Messaging.NATS.Stream)
+	}
+	if cfg.Messaging.NATS.Consumer != "stoa-book-run" {
+		t.Errorf("consumer: got %q", cfg.Messaging.NATS.Consumer)
+	}
+}
+
+func TestLoad_MissingFile(t *testing.T) {
+	_, err := config.Load(filepath.Join(t.TempDir(), "does-not-exist.yaml"))
+	if err == nil {
+		t.Fatal("expected error for missing file")
+	}
+}
+
+func TestDefaultDir(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	got, err := config.DefaultDir()
+	if err != nil {
+		t.Fatalf("DefaultDir: %v", err)
+	}
+	want := filepath.Join(home, ".flarex", "stoa")
+	if got != want {
+		t.Errorf("DefaultDir: got %q, want %q", got, want)
+	}
+	if config.Filename != "config.yaml" {
+		t.Errorf("Filename: got %q, want %q", config.Filename, "config.yaml")
+	}
+}

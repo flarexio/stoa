@@ -3,7 +3,7 @@
 // read-model embedded in a producer that needs fresh state to validate
 // intents against. State is held in process memory; nothing is durable
 // across restarts. For production projection storage, use
-// persistence/postgres (planned).
+// persistence/postgres.
 package memory
 
 import (
