@@ -54,7 +54,7 @@ func awsBillScenario(t *testing.T) (accounting.Scenario, *memory.Repository) {
 // test setup.
 func wireBus(t *testing.T, repo *memory.Repository) bookkeeper.EventBus {
 	t.Helper()
-	bus := inproc.New()
+	bus := inproc.NewAccountingBus()
 	if err := bus.Subscribe(bookkeeper.EventHandlerFunc(func(ctx context.Context, evt accounting.JournalPosted) error {
 		return repo.Apply(ctx, evt)
 	})); err != nil {
@@ -254,7 +254,7 @@ func TestAgent_MissingEngine(t *testing.T) {
 }
 
 func TestAgent_MissingRepo(t *testing.T) {
-	bus := inproc.New()
+	bus := inproc.NewAccountingBus()
 	engine := fakeEngineFunc(func(_ context.Context, _ llm.ReasoningInput) (llm.ReasoningResult[accounting.JournalIntent], error) {
 		return llm.ReasoningResult[accounting.JournalIntent]{}, nil
 	})

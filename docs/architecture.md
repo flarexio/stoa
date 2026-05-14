@@ -61,10 +61,18 @@ stoa/
     integration_test.go
   persistence/
     memory/             # In-memory repository (test + dev default)
+      memory.go         #   Generic store infrastructure
+      accounting.go     #   NewAccountingRepository factory
     <backend>/          # Production repositories (e.g. persistence/postgres)
+      <backend>.go      #   Generic transport plumbing (pool, migrations)
+      accounting.go     #   NewAccountingRepository factory
   messaging/
     inproc/             # In-process EventBus (test + dev default)
+      bus.go            #   Generic in-process sequence allocator
+      accounting.go     #   NewAccountingBus factory
     <transport>/        # Production transports (e.g. messaging/nats)
+      <transport>.go    #   Generic transport (connection, publish, drain)
+      accounting.go     #   NewAccountingBus factory + domain codec
   harness/
     loop/               # Typed reason-validate-execute runner
     validator/          # Shared validation helpers and LLM feedback formatting
@@ -83,6 +91,32 @@ Example: `icd/` defines ICD-10 `Note`, `Intent`, `Validator`, and the `Dictionar
 Outbound adapters -- persistence implementations, message-bus transports, HTTP clients, anything that pulls in an external SDK or network dependency -- do not live under the domain package. They go in the top-level `persistence/` and `messaging/` trees (or their own peer tree for a new category), each adapter in its own subpackage that imports the domain it implements but is not imported by it. For example, `accounting.LedgerRepository` is satisfied by `persistence/memory` (in-process default) and `persistence/postgres` (production, sqlc + pgx/v5); `bookkeeper.EventBus` (Publish + Subscribe + Close, defined alongside the agent in the use-case package because event delivery is orchestration rather than a business rule) is satisfied by `messaging/inproc` (in-process default) and `messaging/nats` (production, JetStream with `Nats-Expected-Last-Subject-Sequence` for optimistic concurrency). Both adapters return the interface from their constructors -- callers depend only on the abstraction. The composition edge -- `cmd/stoa` plus the `config` package -- picks which pair to wire at boot from a `config.yaml` (read from the stoa work directory selected by `--work-dir`, defaulting to `~/.flarex/stoa`; the file is required, no implicit in-process fallback). The domain remains stdlib-only.
 
 Trivial in-process defaults that exist only to make ports usable without infrastructure (an in-memory map satisfying a repository port, a synchronous fan-out satisfying a publisher port) still live in the outbound tree, not in the domain root -- this keeps `go doc <domain>` focused on entities, invariants, and ports, and gives every adapter the same shape regardless of how heavy it is.
+
+## Adapter Convention: Generic Core + Per-Domain Factory
+
+Each adapter package keeps one generic core file plus one thin per-domain factory file. The generic core handles transport-level concerns and does not import any domain package. The factory file imports the domain it serves and provides a `New{domain}{Port}` constructor that returns the domain port interface.
+
+```
+messaging/nats/
+  nats.go              # generic Bus: connection, publish, consume, drain
+  accounting.go        # NewAccountingBus(ctx, cfg) (bookkeeper.EventBus, error)
+
+messaging/inproc/
+  bus.go               # generic in-process sequence allocator
+  accounting.go        # NewAccountingBus() bookkeeper.EventBus
+
+persistence/postgres/
+  postgres.go          # pool / migrations / sqlc plumbing
+  accounting.go        # NewAccountingRepository(...) (accounting.LedgerRepository, io.Closer, error)
+
+persistence/memory/
+  memory.go            # generic in-memory store helpers
+  accounting.go        # NewAccountingRepository() accounting.LedgerRepository
+```
+
+Domain-specific code (event type, port interface, table layout) lives only in the factory file. Generic core handles transport-level concerns: NATS connection lifecycle, JetStream stream/consumer setup, Drain + Close ordering, OCC error translation, pgxpool, etc.
+
+When a second domain (e.g. inventory, HR) needs persistence or messaging, it adds its own `{domain}.go` factory file to the relevant adapter package without touching the generic core. The factory file provides the domain-specific encoding/decoding and implements the domain's port interface by wrapping the generic core.
 
 Feature-based organization does not mean dependency rules disappear. The direction still flows inward through interfaces: the agent depends on domain, never the reverse. Cross-feature contracts, such as `llm.ReasoningEngine[TIntent]`, may live in shared packages when they are intentionally reusable across agents.
 
