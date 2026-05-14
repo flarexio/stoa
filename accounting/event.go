@@ -12,6 +12,14 @@ import (
 // reporting, downstream agent handoff) can react to it independently
 // without coordinating with the projection writer.
 //
+// JournalPosted is intentionally the only entry-affecting event in this
+// package; see the package overview for why the domain has no
+// JournalEdited or JournalDeleted. New event types that introduce
+// relationships between entries (reversals, links, annotations) must
+// reference the target entry's ID in their payload rather than treating
+// the broker sequence as the entry identifier -- the broker sequence
+// belongs to the event, the Entry.ID belongs to the aggregate.
+//
 // Subject and Sequence are routing/ordering metadata supplied by the
 // transport when the event is dispatched to a handler. They are excluded
 // from JSON because broker metadata, not the body, is authoritative:
