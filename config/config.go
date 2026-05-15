@@ -2,9 +2,9 @@
 // the stoa binary wires when it boots. It is read by cmd/stoa only;
 // domain and adapter packages must not import it.
 //
-// The schema is intentionally narrow: pick a persistence kind, pick a
-// messaging kind, and provide the nested block the kind needs. See
-// config.example.yaml for the full shape.
+// The schema is intentionally narrow: pick a persistence kind, a
+// messaging kind, and a reasoning engine, and provide the nested block
+// each one needs. See config.example.yaml for the full shape.
 package config
 
 import (
@@ -58,10 +58,21 @@ const (
 	MessagingNATS   MessagingKind = "nats"
 )
 
+// EngineKind names a reasoning engine the binary knows how to wire. The
+// empty string is treated as EngineScripted so an absent llm block
+// degrades to the offline engine.
+type EngineKind string
+
+const (
+	EngineScripted EngineKind = "scripted"
+	EngineOpenAI   EngineKind = "openai"
+)
+
 // Config is the decoded representation of config.yaml.
 type Config struct {
 	Persistence Persistence `yaml:"persistence"`
 	Messaging   Messaging   `yaml:"messaging"`
+	LLM         LLM         `yaml:"llm"`
 }
 
 // Persistence selects and configures the LedgerRepository backend.
@@ -89,6 +100,14 @@ type NATS struct {
 	Stream   string `yaml:"stream"`
 	Subject  string `yaml:"subject"`
 	Consumer string `yaml:"consumer"`
+}
+
+// LLM selects and configures the reasoning engine the bookkeeper agent
+// runs. Model is consulted only by the openai engine. Both fields are
+// defaults: the --engine and --model CLI flags override them when set.
+type LLM struct {
+	Engine EngineKind `yaml:"engine"`
+	Model  string     `yaml:"model"`
 }
 
 // Load reads path, decodes it strictly (unknown fields are rejected),
@@ -121,6 +140,9 @@ func (c *Config) applyDefaults() {
 	}
 	if c.Messaging.Kind == "" {
 		c.Messaging.Kind = MessagingInproc
+	}
+	if c.LLM.Engine == "" {
+		c.LLM.Engine = EngineScripted
 	}
 }
 
@@ -156,6 +178,17 @@ func (c *Config) Validate() error {
 		}
 	default:
 		errs = append(errs, fmt.Errorf("messaging.kind %q is not supported (inproc|nats)", c.Messaging.Kind))
+	}
+
+	switch c.LLM.Engine {
+	case EngineScripted:
+		// no nested settings required
+	case EngineOpenAI:
+		// llm.model may be supplied here or via the --model flag, so it
+		// is not required at config time; the openai adapter enforces a
+		// non-empty model when the engine is actually wired.
+	default:
+		errs = append(errs, fmt.Errorf("llm.engine %q is not supported (scripted|openai)", c.LLM.Engine))
 	}
 
 	return errors.Join(errs...)

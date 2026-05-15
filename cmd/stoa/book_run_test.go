@@ -21,12 +21,9 @@ func awsBillPath(t *testing.T) string {
 
 const inProcessConfig = "persistence:\n  kind: memory\nmessaging:\n  kind: inproc\n"
 
-// seedInProcessConfig points $HOME at a fresh tempdir and drops a
-// memory+inproc config.yaml in the default ~/.flarex/stoa location.
-// Tests that exercise the no-flag happy path use this so they neither
-// inherit a developer's local config nor depend on the (now removed)
-// in-process fallback that used to fire when the file was missing.
-func seedInProcessConfig(t *testing.T) {
+// seedConfigBody points $HOME at a fresh tempdir and drops the given
+// config.yaml body in the default ~/.flarex/stoa location.
+func seedConfigBody(t *testing.T, body string) {
 	t.Helper()
 	home := t.TempDir()
 	t.Setenv("HOME", home)
@@ -34,9 +31,19 @@ func seedInProcessConfig(t *testing.T) {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatalf("mkdir default config dir: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, config.Filename), []byte(inProcessConfig), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, config.Filename), []byte(body), 0o600); err != nil {
 		t.Fatalf("write default config: %v", err)
 	}
+}
+
+// seedInProcessConfig drops a memory+inproc config.yaml in the default
+// ~/.flarex/stoa location. Tests that exercise the no-flag happy path
+// use this so they neither inherit a developer's local config nor
+// depend on the (now removed) in-process fallback that used to fire
+// when the file was missing.
+func seedInProcessConfig(t *testing.T) {
+	t.Helper()
+	seedConfigBody(t, inProcessConfig)
 }
 
 // isolateHome points $HOME at a fresh tempdir without seeding a config
@@ -176,6 +183,48 @@ func TestRunBook_OpenAIRequiresModel(t *testing.T) {
 	}
 	if !strings.Contains(strings.ToLower(err.Error()), "model") {
 		t.Errorf("error should mention model, got %v", err)
+	}
+}
+
+// llmOpenAIConfig selects the openai engine + model through the llm
+// block, on top of the in-process persistence/messaging backends.
+const llmOpenAIConfig = "persistence:\n  kind: memory\nmessaging:\n  kind: inproc\n" +
+	"llm:\n  engine: openai\n  model: gpt-5.4-mini\n"
+
+func TestRunBook_ConfigLLMSelectsOpenAIEngine(t *testing.T) {
+	// config.yaml selects the openai engine + model; no --engine or
+	// --model flag is passed. The run must reach the openai engine and
+	// fail on the absent API key -- which proves both the engine and
+	// the model were taken from the config llm block (a default to the
+	// scripted engine would instead post an entry with no error).
+	seedConfigBody(t, llmOpenAIConfig)
+	t.Setenv("OPENAI_API_KEY", "")
+	var stdout, stderr bytes.Buffer
+	args := []string{awsBillPath(t), "--request", "x"}
+	err := runBookCLI(context.Background(), args, &stdout, &stderr)
+	if err == nil {
+		t.Fatal("expected the config-selected openai engine to fail without OPENAI_API_KEY")
+	}
+	if !strings.Contains(strings.ToLower(err.Error()), "openai_api_key") {
+		t.Errorf("error should mention OPENAI_API_KEY (config llm.engine+model used), got %v", err)
+	}
+}
+
+func TestRunBook_EngineFlagOverridesConfigLLM(t *testing.T) {
+	// config.yaml selects openai, but --engine scripted overrides it;
+	// the run succeeds offline with no API key.
+	seedConfigBody(t, llmOpenAIConfig)
+	var stdout, stderr bytes.Buffer
+	args := []string{awsBillPath(t), "--request", "Paid AWS bill", "--engine", "scripted"}
+	if err := runBookCLI(context.Background(), args, &stdout, &stderr); err != nil {
+		t.Fatalf("runBookCLI returned error: %v\nstderr: %s", err, stderr.String())
+	}
+	var rep bookRunOutput
+	if err := json.Unmarshal(stdout.Bytes(), &rep); err != nil {
+		t.Fatalf("output is not valid JSON: %v", err)
+	}
+	if rep.Entry.ID == "" {
+		t.Errorf("expected --engine scripted to override config's openai and post an entry")
 	}
 }
 
