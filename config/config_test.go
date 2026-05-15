@@ -31,6 +31,47 @@ func TestLoad_EmptyFileDefaultsToInProcess(t *testing.T) {
 	if cfg.Messaging.Kind != config.MessagingInproc {
 		t.Errorf("messaging default: want inproc, got %q", cfg.Messaging.Kind)
 	}
+	if cfg.LLM.Engine != config.EngineScripted {
+		t.Errorf("llm engine default: want scripted, got %q", cfg.LLM.Engine)
+	}
+}
+
+func TestLoad_LLMBlockParsed(t *testing.T) {
+	path := writeConfig(t, "llm:\n  engine: openai\n  model: gpt-5.4-mini\n")
+	cfg, err := config.Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.LLM.Engine != config.EngineOpenAI {
+		t.Errorf("llm engine: want openai, got %q", cfg.LLM.Engine)
+	}
+	if cfg.LLM.Model != "gpt-5.4-mini" {
+		t.Errorf("llm model: want gpt-5.4-mini, got %q", cfg.LLM.Model)
+	}
+}
+
+func TestLoad_UnknownEngineRejected(t *testing.T) {
+	path := writeConfig(t, "llm:\n  engine: anthropic\n")
+	_, err := config.Load(path)
+	if err == nil {
+		t.Fatal("expected error for unsupported llm engine")
+	}
+	if !strings.Contains(err.Error(), "anthropic") {
+		t.Errorf("error should name the bad engine, got %v", err)
+	}
+}
+
+func TestLoad_OpenAIEngineDoesNotRequireModel(t *testing.T) {
+	// The model may be supplied via the --model CLI flag instead, so
+	// config validation must not reject an openai block without one.
+	path := writeConfig(t, "llm:\n  engine: openai\n")
+	cfg, err := config.Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.LLM.Engine != config.EngineOpenAI || cfg.LLM.Model != "" {
+		t.Errorf("unexpected llm block: %+v", cfg.LLM)
+	}
 }
 
 func TestLoad_PostgresRequiresDSN(t *testing.T) {

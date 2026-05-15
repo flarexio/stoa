@@ -44,10 +44,11 @@ func newBookRunCommand(stdout io.Writer) *cli.Command {
 		Description: "Loads an accounting scenario JSON file, seeds the configured repository,\n" +
 			"runs the bookkeeper.Agent loop, and prints a JSON report to stdout. The\n" +
 			"binary reads config.yaml from --work-dir, defaulting to ~/.flarex/stoa;\n" +
-			"the file must exist (no implicit in-process fallback). Use --engine\n" +
-			"scripted (default) for the deterministic offline reasoning engine, or\n" +
-			"--engine openai to drive a real LLM through the same harness; the openai\n" +
-			"engine needs OPENAI_API_KEY.",
+			"the file must exist (no implicit in-process fallback). The reasoning\n" +
+			"engine and model come from the config.yaml llm block (engine defaults\n" +
+			"to scripted, the deterministic offline engine); --engine and --model\n" +
+			"override that block when set. The openai engine drives a real LLM\n" +
+			"through the same harness and needs OPENAI_API_KEY.",
 		Flags: []cli.Flag{
 			&cli.StringFlag{
 				Name:     "request",
@@ -56,12 +57,11 @@ func newBookRunCommand(stdout io.Writer) *cli.Command {
 			},
 			&cli.StringFlag{
 				Name:  "engine",
-				Usage: "reasoning engine: scripted (offline) or openai (live)",
-				Value: "scripted",
+				Usage: "reasoning engine: scripted (offline) or openai (live); overrides config.yaml llm.engine",
 			},
 			&cli.StringFlag{
 				Name:  "model",
-				Usage: "OpenAI model name (used only when --engine openai)",
+				Usage: "model name for the openai engine; overrides config.yaml llm.model",
 			},
 			&cli.IntFlag{
 				Name:  "amount",
@@ -105,6 +105,15 @@ func runBook(ctx context.Context, c *cli.Command, stdout io.Writer) error {
 	cfg, err := loadBookConfig(workDir)
 	if err != nil {
 		return err
+	}
+
+	// config.yaml supplies the reasoning-engine defaults; a non-empty
+	// --engine / --model flag overrides its block.
+	if engineKind == "" {
+		engineKind = string(cfg.LLM.Engine)
+	}
+	if model == "" {
+		model = cfg.LLM.Model
 	}
 
 	scenario, err := accounting.LoadScenarioFile(path)

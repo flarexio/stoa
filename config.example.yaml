@@ -1,7 +1,7 @@
 # Sample stoa configuration. Copy to config.yaml (gitignored) and edit
-# the values for your environment. Both blocks default to the in-process
-# backends, so an empty file is also valid -- delete a block to use the
-# default.
+# the values for your environment. Every block defaults to the
+# in-process / offline option, so an empty file is also valid -- delete
+# a block to use the default.
 
 persistence:
   # memory  -> persistence/memory; nothing else needed.
@@ -19,3 +19,10 @@ messaging:
     stream: STOA_ACCOUNTING
     subject: accounting.journal
     consumer: stoa-book-run
+
+llm:
+  # scripted -> deterministic offline engine; model is ignored.
+  # openai   -> drives a real LLM; needs model + OPENAI_API_KEY.
+  # The --engine / --model CLI flags override this block when set.
+  engine: openai
+  model: gpt-5.4-mini
