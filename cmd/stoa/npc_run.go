@@ -11,7 +11,6 @@ import (
 
 	"github.com/flarexio/stoa/llm"
 	"github.com/flarexio/stoa/npc"
-	"github.com/flarexio/stoa/runtime"
 	"github.com/flarexio/stoa/world"
 )
 
@@ -84,7 +83,7 @@ func runNPC(ctx context.Context, c *cli.Command, stdout io.Writer) error {
 		taskText = fmt.Sprintf("Decide what %s does next.", actor)
 	}
 
-	engine := runtime.NewScriptedNPCEngine(scenario.State, actor)
+	engine := newScriptedEngine(scenario.State, actor)
 	agent := npc.Agent{Engine: engine, MaxTurns: maxTurns}
 
 	res, runErr := agent.Act(ctx, actor, scenario.State, taskText)
@@ -98,7 +97,7 @@ func runNPC(ctx context.Context, c *cli.Command, stdout io.Writer) error {
 		Intent:      res.Intent,
 		Observation: res.Observation,
 		Events:      res.Events,
-		Feedback:    runtime.ExtractFeedback(res.Events),
+		Feedback:    extractFeedback(res.Events),
 	}
 
 	enc := json.NewEncoder(stdout)

@@ -342,7 +342,7 @@ func TestEventSinkReceivesExecutionErrors(t *testing.T) {
 
 	sink := &recordingSink{}
 	runner := Runner[testIntent]{
-		Engine: engine,
+		Engine:    engine,
 		Validator: ValidatorFunc[testIntent](func(context.Context, testIntent) error { return nil }),
 		Executor: ExecutorFunc[testIntent](func(_ context.Context, intent testIntent) (llm.Observation, error) {
 			executions++

@@ -1,4 +1,4 @@
-package runtime
+package main
 
 import (
 	"context"
@@ -9,23 +9,23 @@ import (
 	"github.com/flarexio/stoa/world"
 )
 
-// ScriptedNPCEngine is a deterministic, offline llm.ReasoningEngine used
-// by the demo CLI and future TUI. It first proposes an intent that the
-// world.Validator will reject (giving an item the actor does not own),
-// then — once validation feedback appears — proposes a valid intent.
-type ScriptedNPCEngine struct {
+// scriptedEngine is a deterministic, offline llm.ReasoningEngine used by the
+// demo CLI. It first proposes an intent that the world.Validator will reject
+// (giving an item the actor does not own), then — once validation feedback
+// appears in the cycle events — proposes a valid intent derived from the
+// scenario. This proves the reason → validate → execute → feedback loop end
+// to end without needing an LLM provider.
+type scriptedEngine struct {
 	world   world.WorldState
 	actorID string
 }
 
-// NewScriptedNPCEngine creates a deterministic reasoning engine for the
-// given world state and actor.
-func NewScriptedNPCEngine(w world.WorldState, actorID string) *ScriptedNPCEngine {
-	return &ScriptedNPCEngine{world: w, actorID: actorID}
+func newScriptedEngine(w world.WorldState, actorID string) *scriptedEngine {
+	return &scriptedEngine{world: w, actorID: actorID}
 }
 
-func (e *ScriptedNPCEngine) Predict(_ context.Context, input llm.ReasoningInput) (llm.ReasoningResult[world.NPCIntent], error) {
-	if HasValidationFeedback(input.Events) {
+func (e *scriptedEngine) Predict(_ context.Context, input llm.ReasoningInput) (llm.ReasoningResult[world.NPCIntent], error) {
+	if hasValidationFeedback(input.Events) {
 		intent, rationale := e.recover()
 		return llm.ReasoningResult[world.NPCIntent]{
 			Evidence: []llm.EvidenceRef{
@@ -46,7 +46,10 @@ func (e *ScriptedNPCEngine) Predict(_ context.Context, input llm.ReasoningInput)
 	}, nil
 }
 
-func (e *ScriptedNPCEngine) firstAttempt() (world.NPCIntent, string) {
+// firstAttempt proposes an intent the validator will reject, so the demo can
+// exercise the feedback loop. Giving a non-existent item fails for any role
+// the engine is asked to drive.
+func (e *scriptedEngine) firstAttempt() (world.NPCIntent, string) {
 	target := e.firstOtherActorInLocation()
 	return world.NPCIntent{
 			Say:     "Here, take this legendary blade I found.",
@@ -60,7 +63,8 @@ func (e *ScriptedNPCEngine) firstAttempt() (world.NPCIntent, string) {
 		"first attempt: try to give a magical item without checking inventory"
 }
 
-func (e *ScriptedNPCEngine) recover() (world.NPCIntent, string) {
+// recover proposes a valid intent based on the actor's role and surroundings.
+func (e *scriptedEngine) recover() (world.NPCIntent, string) {
 	actor, ok := e.world.Actors[e.actorID]
 	if !ok {
 		return world.NPCIntent{Action: world.Action{Type: world.ActionIdle}},
@@ -86,12 +90,13 @@ func (e *ScriptedNPCEngine) recover() (world.NPCIntent, string) {
 		"recover: no valid speak target available; idle"
 }
 
-func (e *ScriptedNPCEngine) firstOtherActorInLocation() string {
+func (e *scriptedEngine) firstOtherActorInLocation() string {
 	actor, ok := e.world.Actors[e.actorID]
 	if !ok {
 		return ""
 	}
-	for _, id := range SortedActorIDs(e.world.Actors) {
+	// Iterate in a stable order so output is deterministic across runs.
+	for _, id := range sortedActorIDs(e.world.Actors) {
 		if id == e.actorID {
 			continue
 		}
@@ -102,17 +107,7 @@ func (e *ScriptedNPCEngine) firstOtherActorInLocation() string {
 	return ""
 }
 
-func roleCanSpeak(role world.ActorRole) bool {
-	switch role {
-	case world.RoleMerchant, world.RolePlayer, world.RoleGuard, world.RoleBandit:
-		return true
-	}
-	return false
-}
-
-// HasValidationFeedback returns true if any cycle event is a validation
-// or execution error, signalling that the model should self-correct.
-func HasValidationFeedback(events []llm.CycleEvent) bool {
+func hasValidationFeedback(events []llm.CycleEvent) bool {
 	for _, ev := range events {
 		if ev.Kind == llm.EventValidationError || ev.Kind == llm.EventExecutionError {
 			return true
@@ -121,9 +116,15 @@ func HasValidationFeedback(events []llm.CycleEvent) bool {
 	return false
 }
 
-// SortedActorIDs returns actor IDs in sorted order for deterministic
-// iteration.
-func SortedActorIDs(actors map[string]world.Actor) []string {
+func roleCanSpeak(role world.ActorRole) bool {
+	switch role {
+	case world.RoleMerchant, world.RolePlayer, world.RoleGuard, world.RoleBandit:
+		return true
+	}
+	return false
+}
+
+func sortedActorIDs(actors map[string]world.Actor) []string {
 	ids := make([]string, 0, len(actors))
 	for id := range actors {
 		ids = append(ids, id)

@@ -12,7 +12,6 @@ import (
 	"github.com/flarexio/stoa/accounting"
 	"github.com/flarexio/stoa/bookkeeper"
 	"github.com/flarexio/stoa/llm"
-	"github.com/flarexio/stoa/runtime"
 )
 
 // bookRunOutput is the machine-readable JSON document the CLI prints on
@@ -95,9 +94,9 @@ func runBook(ctx context.Context, c *cli.Command, stdout io.Writer) error {
 	model := c.String("model")
 	workDir := c.String("work-dir")
 
-	cfg, err := runtime.LoadConfig(workDir)
+	cfg, err := loadBookConfig(workDir)
 	if err != nil {
-		return fmt.Errorf("book-run: %w", err)
+		return err
 	}
 
 	// config.yaml supplies the reasoning-engine defaults; a non-empty
@@ -114,9 +113,9 @@ func runBook(ctx context.Context, c *cli.Command, stdout io.Writer) error {
 		return err
 	}
 
-	repo, repoCloser, err := runtime.NewRepository(ctx, cfg.Persistence)
+	repo, repoCloser, err := buildRepository(ctx, cfg.Persistence)
 	if err != nil {
-		return fmt.Errorf("book-run: %w", err)
+		return err
 	}
 	defer repoCloser.Close()
 
@@ -124,7 +123,7 @@ func runBook(ctx context.Context, c *cli.Command, stdout io.Writer) error {
 		return err
 	}
 
-	period, err := runtime.FirstOpenPeriod(ctx, repo)
+	period, err := firstOpenPeriod(ctx, repo)
 	if err != nil {
 		return err
 	}
@@ -132,15 +131,15 @@ func runBook(ctx context.Context, c *cli.Command, stdout io.Writer) error {
 		return errors.New("book-run: scenario has no open period")
 	}
 
-	bus, err := runtime.NewMessaging(ctx, cfg.Messaging, repo)
+	bus, err := buildMessaging(ctx, cfg.Messaging, repo)
 	if err != nil {
-		return fmt.Errorf("book-run: %w", err)
+		return err
 	}
 	defer bus.Close()
 
-	engine, err := runtime.NewBookEngine(ctx, engineKind, scenario, repo, amount, currency, model)
+	engine, err := buildBookEngine(ctx, engineKind, scenario, repo, amount, currency, model)
 	if err != nil {
-		return fmt.Errorf("book-run: %w", err)
+		return err
 	}
 	agent := bookkeeper.Agent{
 		Engine:    engine,
@@ -160,7 +159,7 @@ func runBook(ctx context.Context, c *cli.Command, stdout io.Writer) error {
 		Entry:       res.Entry,
 		Observation: res.Observation,
 		Events:      res.Events,
-		Feedback:    runtime.ExtractFeedback(res.Events),
+		Feedback:    extractFeedback(res.Events),
 	}
 
 	enc := json.NewEncoder(stdout)
