@@ -41,6 +41,7 @@ type Agent struct {
 	Subject   string
 	Clock     Clock
 	MaxTurns  int
+	Sink      loop.EventSink
 }
 
 // Result is the outcome of one bookkeeping cycle.
@@ -130,6 +131,7 @@ func (a Agent) Book(ctx context.Context, request string) (Result, error) {
 		Validator: validator,
 		Executor:  executor,
 		MaxTurns:  a.MaxTurns,
+		Sink:      a.Sink,
 	}
 
 	out, err := runner.Run(ctx, llm.ReasoningInput{
