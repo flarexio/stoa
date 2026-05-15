@@ -18,6 +18,7 @@ import (
 type Agent struct {
 	Engine   llm.ReasoningEngine[world.NPCIntent]
 	MaxTurns int
+	Sink     loop.EventSink
 }
 
 // Result holds the outcome of one NPC reasoning turn.
@@ -53,6 +54,7 @@ func (a Agent) Act(ctx context.Context, actorID string, w world.WorldState, task
 		Validator: validator,
 		Executor:  executor,
 		MaxTurns:  a.MaxTurns,
+		Sink:      a.Sink,
 	}
 
 	out, err := runner.Run(ctx, llm.ReasoningInput{

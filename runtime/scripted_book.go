@@ -1,4 +1,4 @@
-package main
+package runtime
 
 import (
 	"context"
@@ -8,25 +8,23 @@ import (
 	"github.com/flarexio/stoa/llm"
 )
 
-// scriptedBookEngine is a deterministic, offline llm.ReasoningEngine used
-// by the book-run demo. It first proposes a JournalIntent that the
-// accounting Validator will reject (credits short of debits), then --
-// once validation feedback appears in the cycle events -- proposes a
-// balanced intent derived from the seeded repository. This proves the
-// reason -> validate -> publish -> apply -> feedback loop end to end
-// without needing an LLM provider.
-type scriptedBookEngine struct {
+// ScriptedBookEngine is a deterministic, offline llm.ReasoningEngine. It
+// first proposes a JournalIntent that the accounting Validator will reject
+// (credits short of debits), then — once validation feedback appears in
+// the cycle events — proposes a balanced intent derived from the seeded
+// repository.
+type ScriptedBookEngine struct {
 	repo     accounting.LedgerRepository
 	amount   int64
 	currency string
 }
 
-func newScriptedBookEngine(repo accounting.LedgerRepository, amount int64, currency string) *scriptedBookEngine {
-	return &scriptedBookEngine{repo: repo, amount: amount, currency: currency}
+func NewScriptedBookEngine(repo accounting.LedgerRepository, amount int64, currency string) *ScriptedBookEngine {
+	return &ScriptedBookEngine{repo: repo, amount: amount, currency: currency}
 }
 
-func (e *scriptedBookEngine) Predict(ctx context.Context, input llm.ReasoningInput) (llm.ReasoningResult[accounting.JournalIntent], error) {
-	if hasValidationFeedback(input.Events) {
+func (e *ScriptedBookEngine) Predict(ctx context.Context, input llm.ReasoningInput) (llm.ReasoningResult[accounting.JournalIntent], error) {
+	if HasValidationFeedback(input.Events) {
 		intent, rationale, err := e.recover(ctx)
 		if err != nil {
 			return llm.ReasoningResult[accounting.JournalIntent]{}, err
@@ -53,7 +51,7 @@ func (e *scriptedBookEngine) Predict(ctx context.Context, input llm.ReasoningInp
 	}, nil
 }
 
-func (e *scriptedBookEngine) firstAttempt(ctx context.Context) (accounting.JournalIntent, string, error) {
+func (e *ScriptedBookEngine) firstAttempt(ctx context.Context) (accounting.JournalIntent, string, error) {
 	intent, err := e.balancedIntent(ctx)
 	if err != nil {
 		return accounting.JournalIntent{}, "", err
@@ -64,7 +62,7 @@ func (e *scriptedBookEngine) firstAttempt(ctx context.Context) (accounting.Journ
 	return intent, "first attempt: misread the bill; credit short of debit", nil
 }
 
-func (e *scriptedBookEngine) recover(ctx context.Context) (accounting.JournalIntent, string, error) {
+func (e *ScriptedBookEngine) recover(ctx context.Context) (accounting.JournalIntent, string, error) {
 	intent, err := e.balancedIntent(ctx)
 	if err != nil {
 		return accounting.JournalIntent{}, "", err
@@ -72,22 +70,22 @@ func (e *scriptedBookEngine) recover(ctx context.Context) (accounting.JournalInt
 	return intent, "recover: rebalance credit to match debit", nil
 }
 
-func (e *scriptedBookEngine) balancedIntent(ctx context.Context) (accounting.JournalIntent, error) {
-	period, err := firstOpenPeriod(ctx, e.repo)
+func (e *ScriptedBookEngine) balancedIntent(ctx context.Context) (accounting.JournalIntent, error) {
+	period, err := FirstOpenPeriod(ctx, e.repo)
 	if err != nil {
 		return accounting.JournalIntent{}, err
 	}
-	expense, err := firstActiveAccount(ctx, e.repo, accounting.AccountExpense)
+	expense, err := FirstActiveAccount(ctx, e.repo, accounting.AccountExpense)
 	if err != nil {
 		return accounting.JournalIntent{}, err
 	}
-	liability, err := firstActiveAccount(ctx, e.repo, accounting.AccountLiability)
+	liability, err := FirstActiveAccount(ctx, e.repo, accounting.AccountLiability)
 	if err != nil {
 		return accounting.JournalIntent{}, err
 	}
 
 	dims := accounting.Dimensions{}
-	branch, err := firstBranch(ctx, e.repo)
+	branch, err := FirstBranch(ctx, e.repo)
 	if err != nil {
 		return accounting.JournalIntent{}, err
 	}
@@ -119,7 +117,9 @@ func (e *scriptedBookEngine) balancedIntent(ctx context.Context) (accounting.Jou
 	}, nil
 }
 
-func firstActiveAccount(ctx context.Context, repo accounting.LedgerRepository, t accounting.AccountType) (string, error) {
+// FirstActiveAccount returns the first active account code of the given
+// type, or an empty string if none is found.
+func FirstActiveAccount(ctx context.Context, repo accounting.LedgerRepository, t accounting.AccountType) (string, error) {
 	accounts, err := repo.Accounts(ctx)
 	if err != nil {
 		return "", err
@@ -133,7 +133,9 @@ func firstActiveAccount(ctx context.Context, repo accounting.LedgerRepository, t
 	return "", nil
 }
 
-func firstOpenPeriod(ctx context.Context, repo accounting.LedgerRepository) (accounting.Period, error) {
+// FirstOpenPeriod returns the first open accounting period, or a zero
+// Period if none is open.
+func FirstOpenPeriod(ctx context.Context, repo accounting.LedgerRepository) (accounting.Period, error) {
 	periods, err := repo.Periods(ctx)
 	if err != nil {
 		return accounting.Period{}, err
@@ -147,7 +149,9 @@ func firstOpenPeriod(ctx context.Context, repo accounting.LedgerRepository) (acc
 	return accounting.Period{}, nil
 }
 
-func firstBranch(ctx context.Context, repo accounting.LedgerRepository) (string, error) {
+// FirstBranch returns the first branch ID, or an empty string if none
+// exist.
+func FirstBranch(ctx context.Context, repo accounting.LedgerRepository) (string, error) {
 	branches, err := repo.Branches(ctx)
 	if err != nil {
 		return "", err

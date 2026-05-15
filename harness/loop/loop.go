@@ -41,6 +41,14 @@ func (f ExecutorFunc[TIntent]) Execute(ctx context.Context, intent TIntent) (llm
 	return f(ctx, intent)
 }
 
+// EventSink receives per-turn cycle events as they happen. A caller that
+// wants to observe the reason -> validate -> execute cycle incrementally
+// (e.g. a TUI) implements this interface and sets it on Runner. When Sink
+// is nil the existing blocking Run(ctx, input) API is unchanged.
+type EventSink interface {
+	Emit(ctx context.Context, event llm.CycleEvent) error
+}
+
 type Runner[TIntent any] struct {
 	Engine              llm.ReasoningEngine[TIntent]
 	Validator           Validator[TIntent]
@@ -48,6 +56,7 @@ type Runner[TIntent any] struct {
 	ValidationFormatter FeedbackFormatter
 	ExecutionFormatter  FeedbackFormatter
 	MaxTurns            int
+	Sink                EventSink
 }
 
 type FeedbackFormatter func(error) string
@@ -82,19 +91,45 @@ func (r Runner[TIntent]) Run(ctx context.Context, input llm.ReasoningInput) (Res
 			return result, fmt.Errorf("loop: predict turn %d: %w", turn, err)
 		}
 
-		events = append(events, modelOutputEvent(reasoning))
+		mo := modelOutputEvent(reasoning)
+		events = append(events, mo)
+		if err := r.emit(ctx, mo); err != nil {
+			result.Events = events
+			result.Turns = turn
+			return result, fmt.Errorf("loop: event sink (model output): %w", err)
+		}
+
 		if err := r.Validator.Validate(ctx, reasoning.Intent); err != nil {
-			events = append(events, validationErrorEvent(err, r.validationFormatter()))
+			ve := validationErrorEvent(err, r.validationFormatter())
+			events = append(events, ve)
+			if emitErr := r.emit(ctx, ve); emitErr != nil {
+				result.Events = events
+				result.Turns = turn
+				return result, fmt.Errorf("loop: event sink (validation error): %w", emitErr)
+			}
 			continue
 		}
 
 		observation, err := r.Executor.Execute(ctx, reasoning.Intent)
 		if err != nil {
-			events = append(events, executionErrorEvent(err, r.executionFormatter()))
+			ee := executionErrorEvent(err, r.executionFormatter())
+			events = append(events, ee)
+			if emitErr := r.emit(ctx, ee); emitErr != nil {
+				result.Events = events
+				result.Turns = turn
+				return result, fmt.Errorf("loop: event sink (execution error): %w", emitErr)
+			}
 			continue
 		}
 
-		events = append(events, observationEvent(observation))
+		oe := observationEvent(observation)
+		events = append(events, oe)
+		if emitErr := r.emit(ctx, oe); emitErr != nil {
+			result.Events = events
+			result.Turns = turn
+			return result, fmt.Errorf("loop: event sink (observation): %w", emitErr)
+		}
+
 		return Result[TIntent]{
 			Reasoning:   reasoning,
 			Observation: observation,
@@ -106,6 +141,13 @@ func (r Runner[TIntent]) Run(ctx context.Context, input llm.ReasoningInput) (Res
 	result.Events = events
 	result.Turns = maxTurns
 	return result, ErrMaxTurnsExceeded
+}
+
+func (r Runner[TIntent]) emit(ctx context.Context, event llm.CycleEvent) error {
+	if r.Sink == nil {
+		return nil
+	}
+	return r.Sink.Emit(ctx, event)
 }
 
 func (r Runner[TIntent]) validate() error {
