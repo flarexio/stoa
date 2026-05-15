@@ -103,13 +103,13 @@ func TestLinesFromRows_DecodesTags(t *testing.T) {
 
 func TestMarshalUnmarshalTags_RoundTrip(t *testing.T) {
 	tags := map[string]string{"env": "prod"}
-	raw, err := marshalTags(tags)
+	raw, err := marshalAccountingTags(tags)
 	if err != nil {
-		t.Fatalf("marshalTags: %v", err)
+		t.Fatalf("marshalAccountingTags: %v", err)
 	}
-	got, err := unmarshalTags(raw)
+	got, err := unmarshalAccountingTags(raw)
 	if err != nil {
-		t.Fatalf("unmarshalTags: %v", err)
+		t.Fatalf("unmarshalAccountingTags: %v", err)
 	}
 	if !reflect.DeepEqual(got, tags) {
 		t.Errorf("tags round-trip mismatch: want %v got %v", tags, got)
@@ -117,16 +117,16 @@ func TestMarshalUnmarshalTags_RoundTrip(t *testing.T) {
 }
 
 func TestMarshalTags_EmptyMapBecomesNil(t *testing.T) {
-	raw, err := marshalTags(nil)
+	raw, err := marshalAccountingTags(nil)
 	if err != nil {
-		t.Fatalf("marshalTags(nil): %v", err)
+		t.Fatalf("marshalAccountingTags(nil): %v", err)
 	}
 	if raw != nil {
 		t.Errorf("nil map should marshal to nil bytes, got %q", string(raw))
 	}
-	raw, err = marshalTags(map[string]string{})
+	raw, err = marshalAccountingTags(map[string]string{})
 	if err != nil {
-		t.Fatalf("marshalTags(empty): %v", err)
+		t.Fatalf("marshalAccountingTags(empty): %v", err)
 	}
 	if raw != nil {
 		t.Errorf("empty map should marshal to nil bytes, got %q", string(raw))
@@ -135,12 +135,12 @@ func TestMarshalTags_EmptyMapBecomesNil(t *testing.T) {
 
 func TestUnmarshalTags_EmptyInputs(t *testing.T) {
 	for _, in := range [][]byte{nil, []byte(""), []byte("{}")} {
-		got, err := unmarshalTags(in)
+		got, err := unmarshalAccountingTags(in)
 		if err != nil {
-			t.Fatalf("unmarshalTags(%q): %v", string(in), err)
+			t.Fatalf("unmarshalAccountingTags(%q): %v", string(in), err)
 		}
 		if got != nil {
-			t.Errorf("unmarshalTags(%q) want nil, got %v", string(in), got)
+			t.Errorf("unmarshalAccountingTags(%q) want nil, got %v", string(in), got)
 		}
 	}
 }

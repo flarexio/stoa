@@ -29,7 +29,7 @@ func sampleEvent() accounting.JournalPosted {
 
 func TestBus_PublishStampsSubjectAndSequenceAndCarriesEntryID(t *testing.T) {
 	ctx := context.Background()
-	bus := inproc.New()
+	bus := inproc.NewAccountingBus()
 
 	var observed []accounting.JournalPosted
 	bus.Subscribe(bookkeeper.EventHandlerFunc(func(_ context.Context, evt accounting.JournalPosted) error {
@@ -68,7 +68,7 @@ func TestBus_PublishStampsSubjectAndSequenceAndCarriesEntryID(t *testing.T) {
 
 func TestBus_RejectsStaleExpectedSequence(t *testing.T) {
 	ctx := context.Background()
-	bus := inproc.New()
+	bus := inproc.NewAccountingBus()
 
 	if _, err := bus.Publish(ctx, sampleEvent(), accounting.ExpectedSequence{Subject: "accounting.journal", LastSeq: 0}); err != nil {
 		t.Fatalf("first publish: %v", err)
@@ -82,7 +82,7 @@ func TestBus_RejectsStaleExpectedSequence(t *testing.T) {
 
 func TestBus_SkipsConcurrencyCheckWhenSubjectEmpty(t *testing.T) {
 	ctx := context.Background()
-	bus := inproc.New()
+	bus := inproc.NewAccountingBus()
 
 	if _, err := bus.Publish(ctx, sampleEvent(), accounting.ExpectedSequence{}); err != nil {
 		t.Fatalf("first publish: %v", err)
@@ -94,7 +94,7 @@ func TestBus_SkipsConcurrencyCheckWhenSubjectEmpty(t *testing.T) {
 
 func TestBus_DispatchIsSerializedAcrossSubscribers(t *testing.T) {
 	ctx := context.Background()
-	bus := inproc.New()
+	bus := inproc.NewAccountingBus()
 
 	var (
 		mu    sync.Mutex
@@ -126,7 +126,7 @@ func TestBus_DispatchIsSerializedAcrossSubscribers(t *testing.T) {
 
 func TestBus_HandlerErrorPropagates(t *testing.T) {
 	ctx := context.Background()
-	bus := inproc.New()
+	bus := inproc.NewAccountingBus()
 
 	want := errors.New("boom")
 	bus.Subscribe(bookkeeper.EventHandlerFunc(func(_ context.Context, _ accounting.JournalPosted) error {
