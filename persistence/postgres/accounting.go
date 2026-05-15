@@ -15,23 +15,13 @@ import (
 	"github.com/flarexio/stoa/persistence/postgres/pgstore"
 )
 
-// repository implements accounting.LedgerRepository against Postgres.
-// The type stays unexported so callers depend only on the interface
-// returned by NewAccountingRepository.
-type repository struct {
+// accountingRepository implements accounting.LedgerRepository against
+// Postgres. The name carries the domain so a future second domain
+// (e.g. inventory) can add an inventoryRepository in the same package
+// without colliding.
+type accountingRepository struct {
 	pool *pgxpool.Pool
 	q    *pgstore.Queries
-}
-
-// newRepository wraps an existing pool. Same-package callers use it
-// when they already own a pool; external callers go through
-// NewAccountingRepository which both opens the pool and wires the
-// repository.
-func newRepository(pool *pgxpool.Pool) *repository {
-	return &repository{
-		pool: pool,
-		q:    pgstore.New(pool),
-	}
 }
 
 // NewAccountingRepository opens a pgxpool.Pool from dsn and returns the
@@ -43,12 +33,12 @@ func NewAccountingRepository(ctx context.Context, dsn string) (accounting.Ledger
 	if err != nil {
 		return nil, nil, err
 	}
-	return newRepository(pool), closer, nil
+	return &accountingRepository{pool: pool, q: pgstore.New(pool)}, closer, nil
 }
 
 // --- point reads ---
 
-func (r *repository) Account(ctx context.Context, code string) (accounting.Account, bool, error) {
+func (r *accountingRepository) Account(ctx context.Context, code string) (accounting.Account, bool, error) {
 	row, err := r.q.GetAccount(ctx, code)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -59,7 +49,7 @@ func (r *repository) Account(ctx context.Context, code string) (accounting.Accou
 	return accountFromRow(row), true, nil
 }
 
-func (r *repository) Period(ctx context.Context, id string) (accounting.Period, bool, error) {
+func (r *accountingRepository) Period(ctx context.Context, id string) (accounting.Period, bool, error) {
 	row, err := r.q.GetPeriod(ctx, id)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -70,7 +60,7 @@ func (r *repository) Period(ctx context.Context, id string) (accounting.Period, 
 	return periodFromRow(row), true, nil
 }
 
-func (r *repository) Branch(ctx context.Context, id string) (accounting.Branch, bool, error) {
+func (r *accountingRepository) Branch(ctx context.Context, id string) (accounting.Branch, bool, error) {
 	row, err := r.q.GetBranch(ctx, id)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -81,7 +71,7 @@ func (r *repository) Branch(ctx context.Context, id string) (accounting.Branch, 
 	return branchFromRow(row), true, nil
 }
 
-func (r *repository) Entry(ctx context.Context, id string) (accounting.JournalEntry, bool, error) {
+func (r *accountingRepository) Entry(ctx context.Context, id string) (accounting.JournalEntry, bool, error) {
 	row, err := r.q.GetEntry(ctx, id)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -103,7 +93,7 @@ func (r *repository) Entry(ctx context.Context, id string) (accounting.JournalEn
 
 // --- listings ---
 
-func (r *repository) Accounts(ctx context.Context) ([]accounting.Account, error) {
+func (r *accountingRepository) Accounts(ctx context.Context) ([]accounting.Account, error) {
 	rows, err := r.q.ListAccounts(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("postgres: ListAccounts: %w", err)
@@ -115,7 +105,7 @@ func (r *repository) Accounts(ctx context.Context) ([]accounting.Account, error)
 	return out, nil
 }
 
-func (r *repository) Periods(ctx context.Context) ([]accounting.Period, error) {
+func (r *accountingRepository) Periods(ctx context.Context) ([]accounting.Period, error) {
 	rows, err := r.q.ListPeriods(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("postgres: ListPeriods: %w", err)
@@ -127,7 +117,7 @@ func (r *repository) Periods(ctx context.Context) ([]accounting.Period, error) {
 	return out, nil
 }
 
-func (r *repository) Branches(ctx context.Context) ([]accounting.Branch, error) {
+func (r *accountingRepository) Branches(ctx context.Context) ([]accounting.Branch, error) {
 	rows, err := r.q.ListBranches(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("postgres: ListBranches: %w", err)
@@ -143,7 +133,7 @@ func (r *repository) Branches(ctx context.Context) ([]accounting.Branch, error) 
 // lines populated. The implementation does one query per table -- one
 // for entries, one for lines spanning every entry id -- then stitches
 // them in memory so the projection is exposed by value.
-func (r *repository) Entries(ctx context.Context) ([]accounting.JournalEntry, error) {
+func (r *accountingRepository) Entries(ctx context.Context) ([]accounting.JournalEntry, error) {
 	rows, err := r.q.ListEntries(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("postgres: ListEntries: %w", err)
@@ -177,7 +167,7 @@ func (r *repository) Entries(ctx context.Context) ([]accounting.JournalEntry, er
 
 // --- seed ---
 
-func (r *repository) PutAccount(ctx context.Context, a accounting.Account) error {
+func (r *accountingRepository) PutAccount(ctx context.Context, a accounting.Account) error {
 	if err := r.q.UpsertAccount(ctx, pgstore.UpsertAccountParams{
 		Code:   a.Code,
 		Name:   a.Name,
@@ -189,7 +179,7 @@ func (r *repository) PutAccount(ctx context.Context, a accounting.Account) error
 	return nil
 }
 
-func (r *repository) PutPeriod(ctx context.Context, p accounting.Period) error {
+func (r *accountingRepository) PutPeriod(ctx context.Context, p accounting.Period) error {
 	if err := r.q.UpsertPeriod(ctx, pgstore.UpsertPeriodParams{
 		ID:      p.ID,
 		StartAt: pgtype.Timestamptz{Time: p.Start, Valid: true},
@@ -201,7 +191,7 @@ func (r *repository) PutPeriod(ctx context.Context, p accounting.Period) error {
 	return nil
 }
 
-func (r *repository) PutBranch(ctx context.Context, b accounting.Branch) error {
+func (r *accountingRepository) PutBranch(ctx context.Context, b accounting.Branch) error {
 	if err := r.q.UpsertBranch(ctx, pgstore.UpsertBranchParams{
 		ID:   b.ID,
 		Name: b.Name,
@@ -214,7 +204,7 @@ func (r *repository) PutBranch(ctx context.Context, b accounting.Branch) error {
 // Apply writes the entry, its lines, and the new last-sequence record
 // inside one transaction so a concurrent LastSequence reader cannot see
 // the entry without also seeing the new sequence.
-func (r *repository) Apply(ctx context.Context, evt accounting.JournalPosted) error {
+func (r *accountingRepository) Apply(ctx context.Context, evt accounting.JournalPosted) error {
 	tx, err := r.pool.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
 		return fmt.Errorf("postgres: begin tx: %w", err)
@@ -238,7 +228,7 @@ func (r *repository) Apply(ctx context.Context, evt accounting.JournalPosted) er
 	}
 
 	for idx, line := range entry.Lines {
-		tags, err := marshalTags(line.Dimensions.Tags)
+		tags, err := marshalAccountingTags(line.Dimensions.Tags)
 		if err != nil {
 			return err
 		}
@@ -273,7 +263,7 @@ func (r *repository) Apply(ctx context.Context, evt accounting.JournalPosted) er
 
 // LastSequence returns the broker sequence of the most recent applied
 // JournalPosted on subject, or 0 when no event has been seen yet.
-func (r *repository) LastSequence(ctx context.Context, subject string) (uint64, error) {
+func (r *accountingRepository) LastSequence(ctx context.Context, subject string) (uint64, error) {
 	seq, err := r.q.GetLastSequence(ctx, subject)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -328,7 +318,7 @@ func linesFromRows(rows []pgstore.JournalLine) ([]accounting.JournalLine, error)
 	}
 	out := make([]accounting.JournalLine, len(rows))
 	for i, row := range rows {
-		tags, err := unmarshalTags(row.Tags)
+		tags, err := unmarshalAccountingTags(row.Tags)
 		if err != nil {
 			return nil, err
 		}
@@ -346,7 +336,7 @@ func linesFromRows(rows []pgstore.JournalLine) ([]accounting.JournalLine, error)
 	return out, nil
 }
 
-func marshalTags(tags map[string]string) ([]byte, error) {
+func marshalAccountingTags(tags map[string]string) ([]byte, error) {
 	if len(tags) == 0 {
 		return nil, nil
 	}
@@ -357,7 +347,7 @@ func marshalTags(tags map[string]string) ([]byte, error) {
 	return b, nil
 }
 
-func unmarshalTags(raw []byte) (map[string]string, error) {
+func unmarshalAccountingTags(raw []byte) (map[string]string, error) {
 	if len(raw) == 0 {
 		return nil, nil
 	}
