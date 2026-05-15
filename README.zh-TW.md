@@ -149,31 +149,7 @@ go run ./cmd/stoa npc-run testdata/scenarios/tavern.json --actor mira
 
 `accounting/` 擁有領域模型——科目表、會計期間、分錄和驗證規則——不依賴任何 LLM。`bookkeeper/` 擁有使用案例迴圈和功能專屬的提示詞渲染器。
 
-### 範例：從命令列建立一筆記帳分錄
-
-`book-run` 會從工作目錄（預設 `~/.flarex/stoa`，或用 `--work-dir <dir>`
-指定）讀取 `config.yaml`。檔案必須存在；空檔案也有效，會選用全離線的
-預設值——記憶體持久層、行程內事件匯流排、腳本化推理引擎。需要
-Postgres + NATS + 真實 LLM 時，複製 [`config.example.yaml`](config.example.yaml)。
-
-```bash
-# 一次性設定：空的 config.yaml 會選用全離線預設值。
-mkdir -p ~/.flarex/stoa && touch ~/.flarex/stoa/config.yaml
-
-# 離線範例：腳本引擎第一輪會故意提出一個不平衡分錄，
-# 讓迴圈一定會走過驗證回饋循環。
-go run ./cmd/stoa book-run testdata/accounting/aws_bill.json \
-  --request "Paid AWS bill 100 USD using company credit card"
-
-# 真實打 OpenAI API。--engine 與 --model 會覆寫 config.yaml 的 llm 區塊。
-OPENAI_API_KEY=sk-... go run ./cmd/stoa book-run \
-  testdata/accounting/aws_bill.json \
-  --engine openai \
-  --model gpt-5.4-mini \
-  --request "Paid AWS bill 100 USD using company credit card on 12 May 2026"
-```
-
-JSON 輸出包含：`request`、`turns`、已過帳的 `entry`、最終 `intent`、完整 `events` 軌跡，以及驗證錯誤的 `feedback` 彙整。
+`cmd/stoa book-run` 可從命令列跑這個迴圈；可執行的範例與設定方式見 [`docs/accounting.md`](docs/accounting.md)。
 
 ---
 

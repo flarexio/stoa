@@ -153,35 +153,7 @@ bookkeeping request
 
 `accounting/` owns the domain model — chart of accounts, periods, journal entries, and validation rules — with no LLM dependency. `bookkeeper/` owns the use-case loop and the feature-specific prompt renderer.
 
-### Demo: run a bookkeeping entry from the command line
-
-`book-run` reads `config.yaml` from its work directory (`~/.flarex/stoa`
-by default, or `--work-dir <dir>`). The file must exist; an empty file
-is valid and selects the all-offline defaults — in-memory persistence,
-an in-process event bus, and the scripted reasoning engine. Copy
-[`config.example.yaml`](config.example.yaml) when you want Postgres +
-NATS + a live LLM.
-
-```bash
-# One-time: an empty config.yaml selects the all-offline defaults.
-mkdir -p ~/.flarex/stoa && touch ~/.flarex/stoa/config.yaml
-
-# Offline demo — the scripted engine intentionally proposes an
-# unbalanced entry on the first turn, so the loop always walks through
-# the validation-feedback cycle.
-go run ./cmd/stoa book-run testdata/accounting/aws_bill.json \
-  --request "Paid AWS bill 100 USD using company credit card"
-
-# Live, against the real OpenAI API. --engine and --model override the
-# config.yaml llm block.
-OPENAI_API_KEY=sk-... go run ./cmd/stoa book-run \
-  testdata/accounting/aws_bill.json \
-  --engine openai \
-  --model gpt-5.4-mini \
-  --request "Paid AWS bill 100 USD using company credit card on 12 May 2026"
-```
-
-The JSON output includes: `request`, `turns`, the posted `entry`, the final `intent`, the full `events` trace, and a `feedback` summary of any validation errors.
+`cmd/stoa book-run` runs this loop from the command line; see [`docs/accounting.md`](docs/accounting.md) for the runnable demo and configuration.
 
 ---
 
