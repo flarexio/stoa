@@ -95,11 +95,19 @@ type Messaging struct {
 }
 
 // NATS carries the connection + JetStream settings for messaging/nats.
+//
+// Subject is the concrete subject the producer publishes to and the
+// consumer filters on. StreamSubject is the subject pattern the
+// JetStream stream is bound to -- usually a wildcard such as
+// "accounting.>" so the stream captures the whole namespace and future
+// subjects need no stream reconfiguration. When StreamSubject is empty
+// it defaults to Subject, binding the stream to exactly that subject.
 type NATS struct {
-	URL      string `yaml:"url"`
-	Stream   string `yaml:"stream"`
-	Subject  string `yaml:"subject"`
-	Consumer string `yaml:"consumer"`
+	URL           string `yaml:"url"`
+	Stream        string `yaml:"stream"`
+	Subject       string `yaml:"subject"`
+	StreamSubject string `yaml:"stream_subject"`
+	Consumer      string `yaml:"consumer"`
 }
 
 // LLM selects and configures the reasoning engine the bookkeeper agent
@@ -143,6 +151,9 @@ func (c *Config) applyDefaults() {
 	}
 	if c.LLM.Engine == "" {
 		c.LLM.Engine = EngineScripted
+	}
+	if c.Messaging.NATS.StreamSubject == "" {
+		c.Messaging.NATS.StreamSubject = c.Messaging.NATS.Subject
 	}
 }
 

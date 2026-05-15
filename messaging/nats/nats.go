@@ -30,12 +30,19 @@ const defaultAckWait = 30 * time.Second
 // URL, Stream, Subject, and Consumer are required. AckWait is optional;
 // when zero the package default (30s) is used and propagated to the
 // JetStream consumer config so both ends agree on the deadline.
+//
+// Subject is the concrete subject the bus publishes to and the consumer
+// filters on. StreamSubject is the subject pattern the stream is bound
+// to -- a wildcard like "accounting.>" lets the stream capture future
+// subjects without reconfiguration. When StreamSubject is empty it
+// defaults to Subject.
 type Config struct {
-	URL      string
-	Stream   string
-	Subject  string
-	Consumer string
-	AckWait  time.Duration
+	URL           string
+	Stream        string
+	Subject       string
+	StreamSubject string
+	Consumer      string
+	AckWait       time.Duration
 }
 
 // bus owns the NATS connection, the JetStream context, the durable
@@ -65,6 +72,10 @@ func connect(ctx context.Context, cfg Config) (*bus, error) {
 	if ackWait <= 0 {
 		ackWait = defaultAckWait
 	}
+	streamSubject := cfg.StreamSubject
+	if streamSubject == "" {
+		streamSubject = cfg.Subject
+	}
 	nc, err := nats.Connect(cfg.URL)
 	if err != nil {
 		return nil, fmt.Errorf("nats: connect: %w", err)
@@ -76,7 +87,7 @@ func connect(ctx context.Context, cfg Config) (*bus, error) {
 	}
 	if _, err := js.CreateOrUpdateStream(ctx, jetstream.StreamConfig{
 		Name:      cfg.Stream,
-		Subjects:  []string{cfg.Subject},
+		Subjects:  []string{streamSubject},
 		Retention: jetstream.LimitsPolicy,
 		Storage:   jetstream.FileStorage,
 	}); err != nil {

@@ -13,22 +13,25 @@ errors back to the model for self-correction.
 bookkeeping request
   -> bookkeeper.Agent asks the LLM to propose a JournalIntent
   -> accounting.Validator enforces the accounting invariants
-  -> accounting.Ledger.Post records the entry only after validation succeeds
+  -> the validated entry is published as a JournalPosted event
+  -> a subscribed handler applies the event to the LedgerRepository projection
   -> on validation failure the loop feeds the error back for correction
 ```
 
-The bookkeeping layer never writes to the ledger directly. The only way a
-journal entry enters the ledger is through `Ledger.Post`, which re-runs
-`Validator` before appending.
+The bookkeeping layer never writes to the projection directly. The
+producer (`bookkeeper.Agent`) only validates and publishes a
+`JournalPosted` event; the single writer to the `LedgerRepository`
+projection is the `Apply` handler subscribed to the event bus. See
+`docs/architecture.md` for the event-driven wiring.
 
 ## Model
 
 | Concept            | Type                          | Notes                                                                 |
 | ------------------ | ----------------------------- | --------------------------------------------------------------------- |
 | Company            | `accounting.Company`          | The legal entity that owns the ledger.                                |
-| Chart of accounts  | `Ledger.Accounts` (`Account`) | Active flag controls whether new postings may use the account.        |
-| Accounting period  | `Ledger.Periods` (`Period`)   | Status `open` or `closed`; closed periods reject postings.            |
-| Journal entry      | `JournalEntry`                | Posted, sealed entry. Stored privately and returned by copy.          |
+| Chart of accounts  | `LedgerRepository.Accounts` (`Account`) | Active flag controls whether new postings may use the account.  |
+| Accounting period  | `LedgerRepository.Periods` (`Period`)   | Status `open` or `closed`; closed periods reject postings.      |
+| Journal entry      | `JournalEntry`                | Posted, sealed entry. Returned by copy from the repository.           |
 | Journal line       | `JournalLine`                 | One debit or credit. `Amount` is in minor units (e.g. cents).         |
 | Branch dimension   | `Dimensions.BranchID`         | Reporting tag on a line. Branches are *not* separate ledgers.         |
 | Future dimensions  | `Dimensions.Tags`             | Open-ended map for project / department / channel without API churn. |
@@ -52,13 +55,19 @@ correction cycle can address all problems at once.
 
 ## Posting and immutability
 
-`Ledger.Post` is the single mutation path. It validates the intent, assigns
-a sequential ID (overridable for tests), stamps `PostedAt` via the ledger's
-`Clock`, and appends a deep copy of the lines to its private slice. Both
-`Ledger.Post` and `Ledger.Entries` / `Ledger.Entry` return cloned copies,
-so callers cannot mutate stored entries through any returned value. That is
-how the "posted journal entries are immutable" invariant is enforced
-mechanically rather than by convention.
+A posted `JournalEntry` is immutable. `bookkeeper.Agent` derives the entry
+ID from the broker sequence (`accounting.FormatEntryID(lastSeq+1)`) and
+stamps `PostedAt` via its clock before publishing the `JournalPosted`
+event; the `LedgerRepository.Apply` handler then writes the projection.
+The entry is never edited afterwards -- corrections are posted as new
+reversing entries, never as in-place edits. This is a
+double-entry-bookkeeping invariant (SOX / GAAP / IFRS all require the
+audit trail to be preserved verbatim), documented in full in the
+`accounting` package overview.
+
+Repository reads (`Entries`, `Entry`) return entries by value, and the
+in-memory implementation deep-copies the lines slice, so callers cannot
+mutate stored state through any returned value.
 
 ## Branches are reporting dimensions
 
@@ -70,18 +79,25 @@ prevents the system from drifting into branch-level shadow accounting.
 ## Running the demo
 
 The `stoa book-run` CLI loads a scenario JSON file, runs the
-`bookkeeper.Agent` loop, and prints a JSON report:
+`bookkeeper.Agent` loop, and prints a JSON report. It reads `config.yaml`
+from its work directory (`~/.flarex/stoa` by default); an empty file is
+valid and selects the all-offline defaults -- memory persistence,
+in-process event bus, scripted engine.
 
 ```bash
-# Offline, deterministic. Scripted engine first proposes an unbalanced
-# journal so the demo always walks through the validation-feedback loop.
+# One-time: an empty config.yaml selects the all-offline defaults.
+mkdir -p ~/.flarex/stoa && touch ~/.flarex/stoa/config.yaml
+
+# Offline, deterministic. The scripted engine first proposes an
+# unbalanced journal so the demo always walks through the
+# validation-feedback loop.
 go run ./cmd/stoa book-run testdata/accounting/aws_bill.json \
   --request "Paid AWS bill 100 USD using company credit card"
 
 # Live, against the real OpenAI API. Needs OPENAI_API_KEY in the
-# environment and --model (the adapter does not assume a default model).
-# --amount / --currency are ignored in this mode; the LLM reads both
-# from the request.
+# environment and a model -- via --model or the config.yaml llm block;
+# the adapter assumes no default. --amount / --currency are ignored in
+# this mode; the LLM reads both from the request.
 OPENAI_API_KEY=sk-... go run ./cmd/stoa book-run \
   testdata/accounting/aws_bill.json \
   --engine openai \
