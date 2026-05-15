@@ -149,6 +149,50 @@ messaging:
 	}
 }
 
+func TestLoad_NATSStreamSubjectWildcard(t *testing.T) {
+	body := `messaging:
+  kind: nats
+  nats:
+    url: nats://localhost:4222
+    stream: STOA_ACCOUNTING
+    subject: accounting.journal
+    stream_subject: accounting.>
+    consumer: stoa-book-run
+`
+	path := writeConfig(t, body)
+	cfg, err := config.Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.Messaging.NATS.Subject != "accounting.journal" {
+		t.Errorf("subject: got %q", cfg.Messaging.NATS.Subject)
+	}
+	if cfg.Messaging.NATS.StreamSubject != "accounting.>" {
+		t.Errorf("stream_subject: got %q", cfg.Messaging.NATS.StreamSubject)
+	}
+}
+
+func TestLoad_NATSStreamSubjectDefaultsToSubject(t *testing.T) {
+	// stream_subject omitted -> the stream binds exactly the publish
+	// subject, preserving the single-subject behaviour.
+	body := `messaging:
+  kind: nats
+  nats:
+    url: nats://localhost:4222
+    stream: STOA_ACCOUNTING
+    subject: accounting.journal
+    consumer: stoa-book-run
+`
+	path := writeConfig(t, body)
+	cfg, err := config.Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.Messaging.NATS.StreamSubject != "accounting.journal" {
+		t.Errorf("stream_subject should default to subject, got %q", cfg.Messaging.NATS.StreamSubject)
+	}
+}
+
 func TestLoad_MissingFile(t *testing.T) {
 	_, err := config.Load(filepath.Join(t.TempDir(), "does-not-exist.yaml"))
 	if err == nil {

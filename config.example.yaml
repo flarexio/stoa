@@ -17,7 +17,13 @@ messaging:
   nats:
     url: nats://localhost:4222
     stream: STOA_ACCOUNTING
+    # subject: the concrete subject the producer publishes to and the
+    # consumer filters on.
     subject: accounting.journal
+    # stream_subject: the pattern the JetStream stream is bound to. A
+    # wildcard captures the whole namespace so future subjects need no
+    # stream reconfiguration. Optional -- defaults to subject.
+    stream_subject: accounting.>
     consumer: stoa-book-run
 
 llm:
