@@ -80,13 +80,13 @@ stoa/
     handoff/            # (reserved) shared handoff envelopes
   llm/                  # Reasoning engine and message contracts
   llm/<provider>/       # Provider adapters (e.g. llm/openai)
-  tools/                # Shared tool definitions
+  config/               # config.yaml loader (cmd/stoa only)
   cmd/                  # Executable entry points
-  testdata/             # Notes, golden sets, evaluation fixtures
+  testdata/             # Scenario and accounting fixtures
   docs/
 ```
 
-Example: `icd/` defines ICD-10 `Note`, `Intent`, `Validator`, and the `Dictionary`/`Recorder` ports with their in-memory defaults. `coder/` is the clinical-coding agent that orchestrates the loop and renders the ICD-specific prompt. The OpenAI wiring happens at the composition edge, where `coder.PromptRenderer` is passed into `llm/openai`. `icd/` never imports `coder/` or `llm/`.
+Example: `accounting/` defines the ledger domain -- `Account`, `Period`, `JournalEntry`, `JournalIntent`, the `Validator`, and the `LedgerRepository` port. `bookkeeper/` is the agent that orchestrates the reason-validate-publish loop and renders the bookkeeping prompt. The OpenAI wiring happens at the composition edge, where `bookkeeper`'s prompt renderer is passed into `llm/openai`. `accounting/` never imports `bookkeeper/` or `llm/`. The `world/` + `npc/` pair is a second feature slice with the same shape.
 
 Outbound adapters -- persistence implementations, message-bus transports, HTTP clients, anything that pulls in an external SDK or network dependency -- do not live under the domain package. They go in the top-level `persistence/` and `messaging/` trees (or their own peer tree for a new category), each adapter in its own subpackage that imports the domain it implements but is not imported by it. For example, `accounting.LedgerRepository` is satisfied by `persistence/memory` (in-process default) and `persistence/postgres` (production, sqlc + pgx/v5); `bookkeeper.EventBus` (Publish + Subscribe + Close, defined alongside the agent in the use-case package because event delivery is orchestration rather than a business rule) is satisfied by `messaging/inproc` (in-process default) and `messaging/nats` (production, JetStream with `Nats-Expected-Last-Subject-Sequence` for optimistic concurrency). Both adapters return the interface from their constructors -- callers depend only on the abstraction. The composition edge -- `cmd/stoa` plus the `config` package -- picks which pair to wire at boot from a `config.yaml` (read from the stoa work directory selected by `--work-dir`, defaulting to `~/.flarex/stoa`; the file is required, no implicit in-process fallback). The domain remains stdlib-only.
 
@@ -107,7 +107,7 @@ Every agent follows the same cycle:
 1. **Reason with evidence.** The LLM explains which supplied facts support its proposed intent.
 2. **Emit structured intent.** The model outputs a typed intent, not an action.
 3. **Validate in domain code.** Pure Go rules decide whether the intent is allowed.
-4. **Execute through a port.** Use cases call an interface; infrastructure implements it. In the ICD example, validated intents are recorded through `icd.Recorder`.
+4. **Execute through a port.** Use cases call an interface; infrastructure implements it. In the bookkeeping example, a validated intent is published as a `JournalPosted` event through the `bookkeeper.EventBus` port.
 5. **Feed back observations or errors.** Validation and execution results become typed context for the next cycle.
 
 ```mermaid
@@ -137,7 +137,7 @@ sequenceDiagram
     end
 ```
 
-The important boundary is that the use case depends on `ReasoningEngine` and `Executor`-style interfaces, not on concrete SDKs or tool clients. A feature may also call domain ports directly when the port is itself a business concept, such as `icd.Recorder`.
+The important boundary is that the use case depends on `ReasoningEngine` and `Executor`-style interfaces, not on concrete SDKs or tool clients. A feature may also call domain ports directly when the port is itself a business concept, such as `accounting.LedgerRepository`.
 
 ## Ports, Not Infrastructure Dependencies
 

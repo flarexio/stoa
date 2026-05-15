@@ -147,7 +147,7 @@ The accounting slice applies the same architecture to double-entry bookkeeping. 
 bookkeeping request
 → LLM proposes JournalIntent (accounts, amounts, period)
 → accounting.Validator enforces accounting invariants
-→ Ledger.Post records the entry only after validation succeeds
+→ a validated entry is published as a JournalPosted event and projected into the ledger
 → validation errors feed back as typed events for self-correction
 ```
 
@@ -155,14 +155,25 @@ bookkeeping request
 
 ### Demo: run a bookkeeping entry from the command line
 
+`book-run` reads `config.yaml` from its work directory (`~/.flarex/stoa`
+by default, or `--work-dir <dir>`). The file must exist; an empty file
+is valid and selects the all-offline defaults — in-memory persistence,
+an in-process event bus, and the scripted reasoning engine. Copy
+[`config.example.yaml`](config.example.yaml) when you want Postgres +
+NATS + a live LLM.
+
 ```bash
-# Offline demo — uses a deterministic scripted engine. First turn
-# intentionally proposes an unbalanced entry so the loop always walks
-# through the validation-feedback cycle.
+# One-time: an empty config.yaml selects the all-offline defaults.
+mkdir -p ~/.flarex/stoa && touch ~/.flarex/stoa/config.yaml
+
+# Offline demo — the scripted engine intentionally proposes an
+# unbalanced entry on the first turn, so the loop always walks through
+# the validation-feedback cycle.
 go run ./cmd/stoa book-run testdata/accounting/aws_bill.json \
   --request "Paid AWS bill 100 USD using company credit card"
 
-# Live, against the real OpenAI API. --model is required.
+# Live, against the real OpenAI API. --engine and --model override the
+# config.yaml llm block.
 OPENAI_API_KEY=sk-... go run ./cmd/stoa book-run \
   testdata/accounting/aws_bill.json \
   --engine openai \
@@ -171,22 +182,6 @@ OPENAI_API_KEY=sk-... go run ./cmd/stoa book-run \
 ```
 
 The JSON output includes: `request`, `turns`, the posted `entry`, the final `intent`, the full `events` trace, and a `feedback` summary of any validation errors.
-
----
-
-## Example: ICD-10 coding (proof-of-architecture)
-
-The ICD slice is an earlier proof of the same architecture applied to clinical coding. It reads a clinical note, proposes ICD-10 diagnosis codes, validates them against domain rules, and records only validated intents. It remains as an example of the pattern, not the product direction.
-
-```text
-clinical note
-→ reasoning result with evidence and rationale
-→ icd.Intent with code suggestions
-→ icd.Validator
-→ icd.Recorder
-```
-
-`icd/` does not know anything about AI. It owns the medical coding model: notes, ICD code suggestions, dictionaries, recorders, and validation rules. `coder/` owns the use case loop and the ICD-specific prompt. `llm/openai/` is only one infrastructure adapter that can satisfy the shared reasoning engine contract.
 
 ---
 
@@ -200,10 +195,11 @@ stoa/
 │   └── stoa/              # Demo CLI (npc-run, book-run subcommands)
 ├── world/                 # Game domain: world state, actors, items, NPCIntent, validator
 ├── npc/                   # NPC use-case loop and prompt rendering
-├── accounting/            # Accounting domain: ledger, accounts, periods, validator
-├── bookkeeper/            # Bookkeeping agent loop and prompt rendering
-├── icd/                   # ICD-10 domain model, validator, dictionary, recorder (example)
-├── coder/                 # Clinical coding agent loop and feature prompt (example)
+├── accounting/            # Accounting domain: ledger, accounts, periods, validator, events
+├── bookkeeper/            # Bookkeeping agent loop, prompt rendering, event ports
+├── persistence/           # LedgerRepository adapters (memory, postgres)
+├── messaging/             # EventBus adapters (inproc, nats)
+├── config/                # config.yaml loader for cmd/stoa
 ├── harness/
 │   └── loop/              # Typed reason-validate-execute runner
 ├── llm/                   # Shared reasoning contracts and prompt rendering
@@ -229,7 +225,7 @@ Go idiom organizes packages by **what they provide**, not what they contain. A `
 
 ### Prerequisites
 
-- Go 1.22+
+- Go 1.25+
 - LLM Provider API key or OAuth
 
 ### Install
@@ -252,7 +248,7 @@ OpenAI integration tests are gated behind two environment variables — both mus
 
 ```bash
 STOA_RUN_OPENAI_TESTS=1 OPENAI_API_KEY=sk-... \
-  go test -v -run TestAgent_OpenAI ./bookkeeper/... ./coder/...
+  go test -v -run TestAgent_OpenAI ./bookkeeper/...
 ```
 
 The `STOA_RUN_OPENAI_TESTS` gate ensures that `go test ./...` never silently spends API tokens even when `OPENAI_API_KEY` is present in the environment.
