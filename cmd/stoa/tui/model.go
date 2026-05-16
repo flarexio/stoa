@@ -10,6 +10,7 @@ import (
 	"charm.land/bubbles/v2/textinput"
 	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
+	"charm.land/glamour/v2"
 	"charm.land/lipgloss/v2"
 
 	"github.com/flarexio/stoa/llm"
@@ -63,6 +64,8 @@ type model struct {
 	viewport viewport.Model
 	input    textinput.Model
 	spinner  spinner.Model
+	md       *glamour.TermRenderer // Markdown renderer for lineModel output
+	mdWidth  int                   // wrap width md was built for
 
 	lines   []line
 	running bool
@@ -288,8 +291,28 @@ func (m *model) layout() {
 	h := max(m.height-7, 3)
 	m.viewport.SetWidth(m.width)
 	m.viewport.SetHeight(h)
+	m.ensureMarkdown()
 	m.viewport.SetContent(m.renderTranscript())
 	m.viewport.GotoBottom()
+}
+
+// ensureMarkdown (re)builds the Glamour renderer whenever the transcript
+// wrap width changes. A build failure leaves md nil; renderBody then falls
+// back to plain text.
+func (m *model) ensureMarkdown() {
+	width := max(m.viewport.Width()-2, 20)
+	if m.md != nil && width == m.mdWidth {
+		return
+	}
+	r, err := glamour.NewTermRenderer(
+		glamour.WithStandardStyle("dark"),
+		glamour.WithWordWrap(width),
+	)
+	if err != nil {
+		m.md = nil
+		return
+	}
+	m.md, m.mdWidth = r, width
 }
 
 func eventLineKind(k llm.EventKind) lineKind {
@@ -339,9 +362,20 @@ func (m model) renderTranscript() string {
 		label, style := lineMeta(l.kind)
 		b.WriteString(style.Render(label))
 		b.WriteString("\n")
-		b.WriteString(lipgloss.NewStyle().Width(width).Render(l.text))
+		b.WriteString(m.renderBody(l, width))
 	}
 	return b.String()
+}
+
+// renderBody renders one transcript line's text: model output as Markdown
+// through Glamour, every other kind as width-constrained plain text.
+func (m model) renderBody(l line, width int) string {
+	if l.kind == lineModel && m.md != nil {
+		if out, err := m.md.Render(l.text); err == nil {
+			return strings.Trim(out, "\n")
+		}
+	}
+	return lipgloss.NewStyle().Width(width).Render(l.text)
 }
 
 func (m model) View() tea.View {
