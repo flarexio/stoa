@@ -10,7 +10,7 @@ package tui
 import (
 	"context"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/flarexio/stoa/harness/loop"
 )
@@ -47,7 +47,7 @@ func Run(ctx context.Context, options []Option) error {
 	if len(options) == 0 {
 		return errNoOptions
 	}
-	p := tea.NewProgram(newModel(ctx, options), tea.WithAltScreen(), tea.WithContext(ctx))
+	p := tea.NewProgram(newModel(ctx, options), tea.WithContext(ctx))
 	_, err := p.Run()
 	return err
 }
