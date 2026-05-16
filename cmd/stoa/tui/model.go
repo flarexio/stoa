@@ -6,11 +6,11 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/charmbracelet/bubbles/spinner"
-	"github.com/charmbracelet/bubbles/textinput"
-	"github.com/charmbracelet/bubbles/viewport"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/spinner"
+	"charm.land/bubbles/v2/textinput"
+	"charm.land/bubbles/v2/viewport"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 
 	"github.com/flarexio/stoa/llm"
 )
@@ -91,7 +91,7 @@ func newModel(ctx context.Context, options []Option) model {
 		state:    stateSelect,
 		input:    ti,
 		spinner:  sp,
-		viewport: viewport.New(0, 0),
+		viewport: viewport.New(),
 	}
 }
 
@@ -107,7 +107,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.layout()
 		return m, nil
 
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		return m.handleKey(msg)
 
 	case sessionReadyMsg:
@@ -148,7 +148,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (m model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if msg.String() == "ctrl+c" {
 		if m.running && m.cancel != nil {
 			m.cancel() // cancel the in-flight turn, but keep the program open
@@ -283,11 +283,11 @@ func (m *model) layout() {
 	if !m.ready {
 		return
 	}
-	m.input.Width = max(m.width-6, 10)
+	m.input.SetWidth(max(m.width-6, 10))
 	// header (1) + blank (1) + status (1) + input (1) + footer (1) + margins.
 	h := max(m.height-7, 3)
-	m.viewport.Width = m.width
-	m.viewport.Height = h
+	m.viewport.SetWidth(m.width)
+	m.viewport.SetHeight(h)
 	m.viewport.SetContent(m.renderTranscript())
 	m.viewport.GotoBottom()
 }
@@ -330,7 +330,7 @@ func (m model) renderTranscript() string {
 	if len(m.lines) == 0 {
 		return hintStyle.Render("No turns yet. Type a request below to start.")
 	}
-	width := max(m.viewport.Width-2, 20)
+	width := max(m.viewport.Width()-2, 20)
 	var b strings.Builder
 	for i, l := range m.lines {
 		if i > 0 {
@@ -344,20 +344,23 @@ func (m model) renderTranscript() string {
 	return b.String()
 }
 
-func (m model) View() string {
-	if !m.ready {
-		return "Starting Stoa TUI…"
-	}
-	if m.err != nil {
-		return errorStyle.Render("error: "+m.err.Error()) + "\n\n" +
+func (m model) View() tea.View {
+	var content string
+	switch {
+	case !m.ready:
+		content = "Starting Stoa TUI…"
+	case m.err != nil:
+		content = errorStyle.Render("error: "+m.err.Error()) + "\n\n" +
 			footerStyle.Render("ctrl+c quit")
-	}
-	switch m.state {
-	case stateSelect:
-		return m.selectView()
+	case m.state == stateSelect:
+		content = m.selectView()
 	default:
-		return m.chatView()
+		content = m.chatView()
 	}
+	// v2 controls the alternate screen through the returned View.
+	v := tea.NewView(content)
+	v.AltScreen = true
+	return v
 }
 
 func (m model) selectView() string {

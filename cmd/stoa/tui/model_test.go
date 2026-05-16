@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/flarexio/stoa/harness/loop"
 	"github.com/flarexio/stoa/llm"
@@ -57,7 +57,7 @@ func newTestModel(session Session) model {
 func chatModel(t *testing.T, session Session) model {
 	t.Helper()
 	m := newTestModel(session)
-	next, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	next, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	m = next.(model)
 	if cmd == nil {
 		t.Fatal("enter on the start screen should produce a command")
@@ -88,7 +88,7 @@ func TestModelSelectStartsSession(t *testing.T) {
 	fake := &fakeSession{}
 	m := newTestModel(fake)
 
-	next, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	next, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	m = next.(model)
 	if cmd == nil {
 		t.Fatal("enter should produce a start-session command")
@@ -121,7 +121,7 @@ func TestModelRunTurnStreamsEvents(t *testing.T) {
 	m := chatModel(t, fake)
 	m.input.SetValue("pay the AWS bill")
 
-	next, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	next, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	m = next.(model)
 	if !m.running {
 		t.Fatal("model should be running right after submit")
@@ -149,7 +149,7 @@ func TestModelRunTurnStreamsEvents(t *testing.T) {
 
 func TestModelCtrlCQuitsFromSelect(t *testing.T) {
 	m := newTestModel(&fakeSession{})
-	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyCtrlC})
+	_, cmd := m.Update(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
 	if cmd == nil {
 		t.Fatal("ctrl+c should produce a command")
 	}
@@ -162,13 +162,13 @@ func TestModelCtrlCCancelsRunningTurn(t *testing.T) {
 	m := chatModel(t, blockingSession{})
 	m.input.SetValue("do something slow")
 
-	next, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	next, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	m = next.(model)
 	if !m.running {
 		t.Fatal("model should be running")
 	}
 
-	next, cmd := m.Update(tea.KeyMsg{Type: tea.KeyCtrlC})
+	next, cmd := m.Update(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
 	m = next.(model)
 	if cmd != nil {
 		if _, ok := cmd().(tea.QuitMsg); ok {
@@ -190,7 +190,7 @@ func TestModelEscClosesSessionAndReturns(t *testing.T) {
 	fake := &fakeSession{}
 	m := chatModel(t, fake)
 
-	next, _ := m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	next, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
 	m = next.(model)
 	if m.state != stateSelect {
 		t.Fatalf("state = %v, want stateSelect after esc", m.state)
@@ -202,11 +202,11 @@ func TestModelEscClosesSessionAndReturns(t *testing.T) {
 
 func TestModelViewDoesNotPanic(t *testing.T) {
 	m := newTestModel(&fakeSession{})
-	if m.View() == "" {
+	if m.View().Content == "" {
 		t.Error("select view is empty")
 	}
 	chat := chatModel(t, &fakeSession{})
-	if chat.View() == "" {
+	if chat.View().Content == "" {
 		t.Error("chat view is empty")
 	}
 }
