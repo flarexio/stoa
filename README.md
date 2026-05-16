@@ -157,6 +157,18 @@ bookkeeping request
 
 ---
 
+## Conversational TUI
+
+`stoa tui` is a [Bubble Tea](https://github.com/charmbracelet/bubbletea) terminal UI over the same reason → validate → execute loop. Instead of a one-shot JSON report, it streams each cycle event — model output, validation feedback, observation — as it happens, and keeps the session open for follow-up requests in the same run.
+
+```bash
+go run ./cmd/stoa tui testdata/scenarios/tavern.json testdata/accounting/aws_bill.json
+```
+
+Pass one or more scenario files: accounting scenarios become bookkeeper sessions, world scenarios become one npc session per actor. Choose an agent on the start screen, type a request, watch the loop unfold, and press `ctrl+c` to cancel a running turn or quit. The TUI is presentation only — it observes the harness loop through a `harness/loop.EventSink` and reuses the same composition as `book-run` / `npc-run`.
+
+---
+
 ## Project layout
 
 Stoa organizes code **by feature**, not by architectural layer. A feature is split into a domain package and an agent package so domain models remain independently importable while the agent loop stays explicit.
@@ -164,7 +176,8 @@ Stoa organizes code **by feature**, not by architectural layer. A feature is spl
 ```
 stoa/
 ├── cmd/
-│   └── stoa/              # Demo CLI (npc-run, book-run subcommands)
+│   └── stoa/              # Demo CLI (npc-run, book-run, tui subcommands)
+│       └── tui/           # Bubble Tea conversational UI (presentation only)
 ├── world/                 # Game domain: world state, actors, items, NPCIntent, validator
 ├── npc/                   # NPC use-case loop and prompt rendering
 ├── accounting/            # Accounting domain: ledger, accounts, periods, validator, events
