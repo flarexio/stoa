@@ -217,22 +217,25 @@ cd stoa
 go mod download
 ```
 
-### 執行測試
+### 執行
+
+`cmd/stoa` 是一支小型 CLI，提供 `npc-run`、`book-run`、`tui` 三個子指令。先把本地 Postgres + NATS 服務拉起來，再用 [golang-migrate](https://github.com/golang-migrate/migrate) 套用資料庫 schema：
 
 ```bash
-go test ./...
+docker compose up -d
+
+migrate -path persistence/postgres/migrations \
+  -database "postgres://stoa:stoa@localhost:5432/stoa?sslmode=disable" up
 ```
 
-跑完所有單元與離線測試。不需要 API key 或網路。
-
-OpenAI 整合測試由兩個環境變數共同控制——兩個都要設定才會執行：
+把 `config.yaml` 指向 `postgres` 與 `nats` 後端（格式見 `config.example.yaml`），接著執行子指令：
 
 ```bash
-STOA_RUN_OPENAI_TESTS=1 OPENAI_API_KEY=sk-... \
-  go test -v -run TestAgent_OpenAI ./bookkeeper/...
+go run ./cmd/stoa book-run testdata/accounting/aws_bill.json \
+  --request "Paid AWS bill 100 USD using company credit card"
 ```
 
-`STOA_RUN_OPENAI_TESTS` 閘門確保 `go test ./...` 即使在環境中已有 `OPENAI_API_KEY` 的情況下，也不會默默消耗 API tokens。
+改用空的 `config.yaml` 則選用全離線預設值——記憶體帳本、行程內匯流排，不需任何服務。
 
 ---
 

@@ -221,22 +221,25 @@ cd stoa
 go mod download
 ```
 
-### Run tests
+### Run
+
+`cmd/stoa` is a small CLI with `npc-run`, `book-run`, and `tui` subcommands. Bring up the local Postgres + NATS stack and apply the schema with [golang-migrate](https://github.com/golang-migrate/migrate):
 
 ```bash
-go test ./...
+docker compose up -d
+
+migrate -path persistence/postgres/migrations \
+  -database "postgres://stoa:stoa@localhost:5432/stoa?sslmode=disable" up
 ```
 
-This runs all unit and offline tests. No API key or network access required.
-
-OpenAI integration tests are gated behind two environment variables — both must be set:
+Point `config.yaml` at the `postgres` and `nats` backends — see `config.example.yaml` — then run a subcommand:
 
 ```bash
-STOA_RUN_OPENAI_TESTS=1 OPENAI_API_KEY=sk-... \
-  go test -v -run TestAgent_OpenAI ./bookkeeper/...
+go run ./cmd/stoa book-run testdata/accounting/aws_bill.json \
+  --request "Paid AWS bill 100 USD using company credit card"
 ```
 
-The `STOA_RUN_OPENAI_TESTS` gate ensures that `go test ./...` never silently spends API tokens even when `OPENAI_API_KEY` is present in the environment.
+An empty `config.yaml` instead selects the all-offline defaults — in-memory ledger, in-process bus, no services needed.
 
 ---
 
