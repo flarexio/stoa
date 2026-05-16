@@ -30,6 +30,7 @@ func newApp(stdout, stderr io.Writer) *cli.Command {
 		Commands: []*cli.Command{
 			newNPCRunCommand(stdout),
 			newBookRunCommand(stdout),
+			newTUICommand(),
 		},
 	}
 }

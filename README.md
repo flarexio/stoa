@@ -157,6 +157,18 @@ bookkeeping request
 
 ---
 
+## Conversational TUI
+
+`stoa tui` is a [Bubble Tea](https://github.com/charmbracelet/bubbletea) terminal UI over the same reason → validate → execute loop. Instead of a one-shot JSON report, it streams each cycle event — model output, validation feedback, observation — as it happens, and keeps the session open for follow-up requests in the same run.
+
+```bash
+go run ./cmd/stoa tui testdata/scenarios/tavern.json testdata/accounting/aws_bill.json
+```
+
+Pass one or more scenario files: accounting scenarios become bookkeeper sessions, world scenarios become one npc session per actor. Choose an agent on the start screen, type a request, watch the loop unfold, and press `ctrl+c` to cancel a running turn or quit. The TUI is presentation only — it observes the harness loop through a `harness/loop.EventSink` and reuses the same composition as `book-run` / `npc-run`.
+
+---
+
 ## Project layout
 
 Stoa organizes code **by feature**, not by architectural layer. A feature is split into a domain package and an agent package so domain models remain independently importable while the agent loop stays explicit.
@@ -164,7 +176,8 @@ Stoa organizes code **by feature**, not by architectural layer. A feature is spl
 ```
 stoa/
 ├── cmd/
-│   └── stoa/              # Demo CLI (npc-run, book-run subcommands)
+│   └── stoa/              # Demo CLI (npc-run, book-run, tui subcommands)
+│       └── tui/           # Bubble Tea conversational UI (presentation only)
 ├── world/                 # Game domain: world state, actors, items, NPCIntent, validator
 ├── npc/                   # NPC use-case loop and prompt rendering
 ├── accounting/            # Accounting domain: ledger, accounts, periods, validator, events
@@ -208,22 +221,25 @@ cd stoa
 go mod download
 ```
 
-### Run tests
+### Run
+
+`cmd/stoa` is a small CLI with `npc-run`, `book-run`, and `tui` subcommands. Bring up the local Postgres + NATS stack and apply the schema with [golang-migrate](https://github.com/golang-migrate/migrate):
 
 ```bash
-go test ./...
+docker compose up -d
+
+migrate -path persistence/postgres/migrations \
+  -database "postgres://stoa:stoa@localhost:5432/stoa?sslmode=disable" up
 ```
 
-This runs all unit and offline tests. No API key or network access required.
-
-OpenAI integration tests are gated behind two environment variables — both must be set:
+Point `config.yaml` at the `postgres` and `nats` backends — see `config.example.yaml` — then run a subcommand:
 
 ```bash
-STOA_RUN_OPENAI_TESTS=1 OPENAI_API_KEY=sk-... \
-  go test -v -run TestAgent_OpenAI ./bookkeeper/...
+go run ./cmd/stoa book-run testdata/accounting/aws_bill.json \
+  --request "Paid AWS bill 100 USD using company credit card"
 ```
 
-The `STOA_RUN_OPENAI_TESTS` gate ensures that `go test ./...` never silently spends API tokens even when `OPENAI_API_KEY` is present in the environment.
+An empty `config.yaml` instead selects the all-offline defaults — in-memory ledger, in-process bus, no services needed.
 
 ---
 
