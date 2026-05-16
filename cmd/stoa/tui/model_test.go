@@ -2,6 +2,7 @@ package tui
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
@@ -208,5 +209,26 @@ func TestModelViewDoesNotPanic(t *testing.T) {
 	chat := chatModel(t, &fakeSession{})
 	if chat.View().Content == "" {
 		t.Error("chat view is empty")
+	}
+}
+
+func TestModelRendersModelOutputAsMarkdown(t *testing.T) {
+	m := newTestModel(&fakeSession{})
+	if m.md == nil {
+		t.Fatal("layout should have built the Glamour renderer")
+	}
+	width := max(m.viewport.Width()-2, 20)
+
+	// Model output is Markdown-rendered: Glamour consumes inline-code
+	// backticks.
+	got := m.renderBody(line{kind: lineModel, text: "run `go test`"}, width)
+	if strings.Contains(got, "`") {
+		t.Errorf("model output should be Markdown-rendered, backticks remain: %q", got)
+	}
+
+	// Every other line kind stays literal.
+	plain := m.renderBody(line{kind: lineSystem, text: "run `go test`"}, width)
+	if !strings.Contains(plain, "`") {
+		t.Errorf("non-model line should stay literal, got %q", plain)
 	}
 }
