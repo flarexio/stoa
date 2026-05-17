@@ -180,19 +180,15 @@ func (r Runner[TIntent]) emit(ctx context.Context, event llm.CycleEvent) error {
 // feedback content the model can recover from on the next turn; it never
 // aborts the loop.
 func (r Runner[TIntent]) runTool(ctx context.Context, call llm.ToolCall) llm.CycleEvent {
-	var content string
-	switch handler, ok := r.Tools[call.Name]; {
-	case !ok:
-		content = fmt.Sprintf("tool %q is not available", call.Name)
-	default:
-		out, err := handler(ctx, call.Args)
-		if err != nil {
-			content = fmt.Sprintf("tool %q failed: %v", call.Name, err)
-		} else {
-			content = out
-		}
+	handler, ok := r.Tools[call.Name]
+	if !ok {
+		return toolResultEvent(call.Name, fmt.Sprintf("tool %q is not available", call.Name))
 	}
-	return toolResultEvent(call.Name, content)
+	out, err := handler(ctx, call.Args)
+	if err != nil {
+		return toolResultEvent(call.Name, fmt.Sprintf("tool %q failed: %v", call.Name, err))
+	}
+	return toolResultEvent(call.Name, out)
 }
 
 func (r Runner[TIntent]) validate() error {
