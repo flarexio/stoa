@@ -70,7 +70,15 @@ func (r PromptRenderer) Render(input llm.ReasoningInput) ([]llm.Message, error) 
 	return messages, nil
 }
 
+// accountDumpThreshold is the active-account count at or below which the
+// renderer lists the whole chart in the prompt. Above it, the chart is
+// summarized and the model uses the find_accounts tool to look up codes,
+// so a large chart never bloats every turn's prompt.
+const accountDumpThreshold = 12
+
 func (r PromptRenderer) buildUserPrompt(input llm.ReasoningInput) string {
+	toolMode := r.activeAccountCount() > accountDumpThreshold
+
 	var b strings.Builder
 	b.WriteString("Bookkeeping request:\n")
 	b.WriteString(strings.TrimSpace(input.Task))
@@ -81,8 +89,13 @@ func (r PromptRenderer) buildUserPrompt(input llm.ReasoningInput) string {
 
 	fmt.Fprintf(&b, "\n\nCompany: %s\n", r.Company.Name)
 
-	b.WriteString("\nActive chart of accounts:\n")
-	b.WriteString(r.activeAccounts())
+	if toolMode {
+		b.WriteString("\n")
+		b.WriteString(r.chartSummary())
+	} else {
+		b.WriteString("\nActive chart of accounts:\n")
+		b.WriteString(r.activeAccounts())
+	}
 
 	b.WriteString("\nOpen accounting periods:\n")
 	b.WriteString(r.openPeriods())
@@ -96,14 +109,71 @@ func (r PromptRenderer) buildUserPrompt(input llm.ReasoningInput) string {
 	b.WriteString("  - amount is an integer in minor currency units. $100 USD = 10000.\n")
 	b.WriteString("  - include at least two lines with one or more debits and one or more credits; total debit must equal total credit.\n")
 	b.WriteString("  - date must be RFC3339 (e.g. 2026-05-12T00:00:00Z) and fall inside the chosen period.\n")
-	b.WriteString("  - pick account_code only from the active chart of accounts above.\n")
+	if toolMode {
+		b.WriteString("  - the chart of accounts is not listed; call find_accounts to look up the account_code values you need.\n")
+	} else {
+		b.WriteString("  - pick account_code only from the active chart of accounts above.\n")
+	}
 	b.WriteString("  - pick period_id only from the open periods above.\n")
 
-	b.WriteString("\nReturn JSON with this exact shape:\n")
-	b.WriteString(`{"evidence":[{"source":"chart_of_accounts","fact":"..."}],"rationale":"...","intent":{"date":"2026-05-12T00:00:00Z","period_id":"<period_id>","currency":"USD","description":"...","lines":[{"account_code":"<code>","side":"debit","amount":10000,"memo":"...","dimensions":{"branch_id":"<branch_id>"}},{"account_code":"<code>","side":"credit","amount":10000,"memo":"...","dimensions":{}}]}}`)
+	if toolMode {
+		b.WriteString("\nTool -- find_accounts: search the chart of accounts by name.\n")
+		b.WriteString("  args: " + findAccountsArgsShape + "\n")
+		b.WriteString("\nEach turn, return JSON in ONE of these two shapes.\n")
+		b.WriteString("To look up accounts:\n")
+		b.WriteString(toolCallJSONShape + "\n")
+		b.WriteString("To post the entry once you have the codes:\n")
+		b.WriteString(intentJSONShape)
+	} else {
+		b.WriteString("\nReturn JSON with this exact shape:\n")
+		b.WriteString(intentJSONShape)
+	}
 
 	return b.String()
 }
+
+// chartSummary describes the chart of accounts by type and count instead of
+// listing every account -- the tool-mode alternative to activeAccounts.
+func (r PromptRenderer) chartSummary() string {
+	byType := map[accounting.AccountType]int{}
+	total := 0
+	for _, a := range r.Accounts {
+		if !a.Active {
+			continue
+		}
+		total++
+		byType[a.Type]++
+	}
+	var b strings.Builder
+	fmt.Fprintf(&b, "Chart of accounts: %d active accounts (not listed -- use find_accounts).\n", total)
+	for _, t := range []accounting.AccountType{
+		accounting.AccountAsset, accounting.AccountLiability, accounting.AccountEquity,
+		accounting.AccountRevenue, accounting.AccountExpense,
+	} {
+		if n := byType[t]; n > 0 {
+			fmt.Fprintf(&b, "  - %s: %d\n", t, n)
+		}
+	}
+	return b.String()
+}
+
+func (r PromptRenderer) activeAccountCount() int {
+	n := 0
+	for _, a := range r.Accounts {
+		if a.Active {
+			n++
+		}
+	}
+	return n
+}
+
+const (
+	findAccountsArgsShape = `{"name_contains":"<text>","type":"<asset|liability|equity|revenue|expense; optional>"}`
+
+	toolCallJSONShape = `{"evidence":[{"source":"request","fact":"..."}],"rationale":"...","tool_calls":[{"name":"find_accounts","args":{"name_contains":"rent"}}]}`
+
+	intentJSONShape = `{"evidence":[{"source":"chart_of_accounts","fact":"..."}],"rationale":"...","intent":{"date":"2026-05-12T00:00:00Z","period_id":"<period_id>","currency":"USD","description":"...","lines":[{"account_code":"<code>","side":"debit","amount":10000,"memo":"...","dimensions":{"branch_id":"<branch_id>"}},{"account_code":"<code>","side":"credit","amount":10000,"memo":"...","dimensions":{}}]}}`
+)
 
 func (r PromptRenderer) activeAccounts() string {
 	sorted := append([]accounting.Account(nil), r.Accounts...)

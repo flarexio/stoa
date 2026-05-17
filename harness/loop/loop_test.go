@@ -2,6 +2,7 @@ package loop
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"strings"
 	"testing"
@@ -461,5 +462,96 @@ func TestContextCancellationAbortsLoop(t *testing.T) {
 	}
 	if sink.events[1].Kind != llm.EventValidationError {
 		t.Fatalf("event 1 kind = %q, want validation_error", sink.events[1].Kind)
+	}
+}
+
+func TestRunnerRunsToolThenIntent(t *testing.T) {
+	engine := &fakeEngine{
+		results: []llm.ReasoningResult[testIntent]{
+			{
+				Rationale: "need a lookup first",
+				ToolCalls: []llm.ToolCall{{Name: "echo", Args: json.RawMessage(`{"q":"hello"}`)}},
+			},
+			{
+				Rationale: "now I can act",
+				Intent:    testIntent{Action: "continue"},
+			},
+		},
+	}
+
+	var toolArgs string
+	runner := Runner[testIntent]{
+		Engine: engine,
+		Tools: map[string]ToolHandler{
+			"echo": func(_ context.Context, args json.RawMessage) (string, error) {
+				toolArgs = string(args)
+				return "echoed: " + string(args), nil
+			},
+		},
+		Validator: ValidatorFunc[testIntent](func(context.Context, testIntent) error { return nil }),
+		Executor: ExecutorFunc[testIntent](func(context.Context, testIntent) (llm.Observation, error) {
+			return llm.Observation{Summary: "done"}, nil
+		}),
+	}
+
+	result, err := runner.Run(context.Background(), llm.ReasoningInput{Task: "go"})
+	if err != nil {
+		t.Fatalf("Run returned error: %v", err)
+	}
+	if result.Turns != 2 {
+		t.Fatalf("turns = %d, want 2 (one tool round + one intent)", result.Turns)
+	}
+	if toolArgs != `{"q":"hello"}` {
+		t.Errorf("tool received args %q, want the raw JSON the model supplied", toolArgs)
+	}
+	if len(engine.inputs) != 2 {
+		t.Fatalf("engine called %d times, want 2", len(engine.inputs))
+	}
+	var sawToolResult bool
+	for _, ev := range engine.inputs[1].Events {
+		if ev.Kind == llm.EventToolResult && strings.Contains(ev.Content, "echoed:") {
+			sawToolResult = true
+		}
+	}
+	if !sawToolResult {
+		t.Error("second turn did not receive the tool result as an event")
+	}
+	if result.Observation.Summary != "done" {
+		t.Errorf("observation = %q, want done", result.Observation.Summary)
+	}
+}
+
+func TestRunnerUnknownToolFeedsBackAndContinues(t *testing.T) {
+	// No Tools registered: an unknown tool call must feed back as
+	// recoverable content, not abort the loop.
+	engine := &fakeEngine{
+		results: []llm.ReasoningResult[testIntent]{
+			{Rationale: "try a tool", ToolCalls: []llm.ToolCall{{Name: "nope"}}},
+			{Rationale: "fall back to acting", Intent: testIntent{Action: "continue"}},
+		},
+	}
+	runner := Runner[testIntent]{
+		Engine:    engine,
+		Validator: ValidatorFunc[testIntent](func(context.Context, testIntent) error { return nil }),
+		Executor: ExecutorFunc[testIntent](func(context.Context, testIntent) (llm.Observation, error) {
+			return llm.Observation{Summary: "done"}, nil
+		}),
+	}
+
+	result, err := runner.Run(context.Background(), llm.ReasoningInput{Task: "go"})
+	if err != nil {
+		t.Fatalf("Run returned error: %v", err)
+	}
+	if result.Turns != 2 {
+		t.Fatalf("turns = %d, want 2", result.Turns)
+	}
+	var sawNotAvailable bool
+	for _, ev := range engine.inputs[1].Events {
+		if ev.Kind == llm.EventToolResult && strings.Contains(ev.Content, "not available") {
+			sawNotAvailable = true
+		}
+	}
+	if !sawNotAvailable {
+		t.Error("unknown tool should feed back a 'not available' tool_result event")
 	}
 }

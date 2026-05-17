@@ -35,6 +35,7 @@ const (
 	lineObservation
 	lineSystem
 	lineError
+	lineTool
 )
 
 // line is one rendered entry in the chat transcript.
@@ -325,6 +326,8 @@ func eventLineKind(k llm.EventKind) lineKind {
 		return lineExecution
 	case llm.EventObservation:
 		return lineObservation
+	case llm.EventToolResult:
+		return lineTool
 	default:
 		return lineSystem
 	}
@@ -342,6 +345,8 @@ func lineMeta(k lineKind) (string, lipgloss.Style) {
 		return "exec error", executionStyle
 	case lineObservation:
 		return "observation", observationStyle
+	case lineTool:
+		return "tool", toolStyle
 	case lineError:
 		return "error", errorStyle
 	default:
