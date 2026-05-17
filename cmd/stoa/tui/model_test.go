@@ -232,3 +232,9 @@ func TestModelRendersModelOutputAsMarkdown(t *testing.T) {
 		t.Errorf("non-model line should stay literal, got %q", plain)
 	}
 }
+
+func TestEventLineKindMapsToolResult(t *testing.T) {
+	if got := eventLineKind(llm.EventToolResult); got != lineTool {
+		t.Errorf("eventLineKind(EventToolResult) = %v, want lineTool", got)
+	}
+}

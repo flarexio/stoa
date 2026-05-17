@@ -29,7 +29,7 @@ Dependencies flow inward. Code is organized **by feature**.
 To ensure "Knowing and Doing are One", every agent must follow this cycle:
 
 1.  **Reasoning with Evidence**: The agent must output its reasoning based on provided facts before stating an intent.
-2.  **Structured Intent**: The agent outputs a strictly typed `Intent` (not an action).
+2.  **Structured Intent**: The agent outputs a strictly typed `Intent` (not an action). When it needs more facts first, it may return tool calls instead, which the harness runs and feeds back before the next cycle.
 3.  **Domain Validation**: The `Intent` is validated against pure Go business rules (The Conscience).
 4.  **Verified Execution**: Only validated intents are executed by Go code.
 5.  **Environment Feedback**: If validation or execution fails, the precise error is fed back as context for the next reasoning cycle.
@@ -44,7 +44,8 @@ To ensure "Knowing and Doing are One", every agent must follow this cycle:
 - Some tools add this automatically; for tools that do not, the agent must add it explicitly instead of omitting it.
 
 ## Current LLM Contract
-- `llm.ReasoningEngine[TIntent]` returns `llm.ReasoningResult[TIntent]` with evidence, rationale, and typed intent.
+- `llm.ReasoningEngine[TIntent]` returns `llm.ReasoningResult[TIntent]` with evidence, rationale, and either a typed intent or tool calls.
+- A turn may return `llm.ToolCall` values instead of a final intent; `harness/loop` runs the matching tool handler and feeds the result back as a typed `tool_result` event before the next turn.
 - `llm.PromptRenderer` converts typed reasoning input into provider-neutral messages.
 - `llm.Decoder[TIntent]` converts raw model output into typed reasoning results. JSON is only the default decoder, not an architecture requirement.
 - OpenAI code under `llm/openai` must stay provider-specific: SDK calls, message translation, response-format selection, and provider error wrapping only.

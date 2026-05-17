@@ -130,6 +130,7 @@ func (a Agent) Book(ctx context.Context, request string) (Result, error) {
 		Engine:    a.Engine,
 		Validator: validator,
 		Executor:  executor,
+		Tools:     accountTools(a.Repo),
 		MaxTurns:  a.MaxTurns,
 		Sink:      a.Sink,
 	}

@@ -107,7 +107,7 @@ Feature-based organization does not mean dependency rules disappear. The directi
 Every agent follows the same cycle:
 
 1. **Reason with evidence.** The LLM explains which supplied facts support its proposed intent.
-2. **Emit structured intent.** The model outputs a typed intent, not an action.
+2. **Emit a typed intent, or call tools.** The model outputs a typed intent, not an action. When it needs more information first, it returns tool calls instead; the loop runs each through a feature-provided handler, feeds the results back as typed events, and reasons again. A tool result is a starting point, not authority -- the validator below still has the final say.
 3. **Validate in domain code.** Pure Go rules decide whether the intent is allowed.
 4. **Execute through a port.** Use cases call an interface; infrastructure implements it. In the bookkeeping example, a validated intent is published as a `JournalPosted` event through the `bookkeeper.EventBus` port.
 5. **Feed back observations or errors.** Validation and execution results become typed context for the next cycle.
@@ -116,6 +116,7 @@ Every agent follows the same cycle:
 sequenceDiagram
     participant UC as Use Case
     participant RE as Reasoning Engine Port
+    participant TOOL as Tool Handler
     participant DOM as Domain Validator
     participant EX as Executor Port
     participant AD as Adapter / Infrastructure
@@ -123,16 +124,21 @@ sequenceDiagram
     Note over UC: Start task with typed context
     loop Reasoning Cycle
         UC->>RE: Predict(Task, Events) -> ReasoningResult[Intent]
-        RE-->>UC: Evidence + Rationale + Intent
-        UC->>DOM: Validate(Intent)
+        RE-->>UC: Evidence + Rationale + Intent or ToolCalls
 
-        alt Valid intent
-            UC->>EX: Execute(Intent)
-            EX->>AD: Translate and call concrete tool
-            AD-->>EX: Observation or execution error
-            EX-->>UC: Observation or execution error
-        else Invalid intent
-            DOM-->>UC: Validation error
+        alt Tool calls
+            UC->>TOOL: Run each requested tool
+            TOOL-->>UC: Tool result
+        else Intent
+            UC->>DOM: Validate(Intent)
+            alt Valid intent
+                UC->>EX: Execute(Intent)
+                EX->>AD: Translate and call infrastructure
+                AD-->>EX: Observation or execution error
+                EX-->>UC: Observation or execution error
+            else Invalid intent
+                DOM-->>UC: Validation error
+            end
         end
 
         UC->>UC: Append typed event for the next cycle
@@ -183,6 +189,12 @@ type ReasoningResult[TIntent any] struct {
 	Evidence  []EvidenceRef
 	Rationale string
 	Intent    TIntent
+	ToolCalls []ToolCall
+}
+
+type ToolCall struct {
+	Name string
+	Args json.RawMessage
 }
 
 type EvidenceRef struct {
@@ -192,6 +204,8 @@ type EvidenceRef struct {
 ```
 
 `Rationale` should be concise and auditable. It is not a place to depend on hidden chain-of-thought. The contract should capture what a validator, test, or human reviewer can inspect.
+
+A turn populates either `Intent` or `ToolCalls`: when the model must look something up before it can commit, it returns tool calls, and the harness loop runs them and feeds the results back before the next turn. The loop never inspects a tool's arguments or result, so the mechanism stays generic across features.
 
 ## Cycle Events
 
@@ -209,6 +223,7 @@ const (
 	EventValidationError EventKind = "validation_error"
 	EventExecutionError  EventKind = "execution_error"
 	EventObservation     EventKind = "observation"
+	EventToolResult      EventKind = "tool_result"
 )
 ```
 
@@ -236,6 +251,7 @@ Good harness responsibilities:
 - Retry loops with bounded attempts.
 - Circuit breakers and timeouts.
 - Common event recording helpers.
+- Routing model tool calls to feature-provided handlers.
 - Shared handoff utilities when multiple features need the same envelope.
 
 Bad harness responsibilities:

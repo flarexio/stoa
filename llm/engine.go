@@ -1,6 +1,9 @@
 package llm
 
-import "context"
+import (
+	"context"
+	"encoding/json"
+)
 
 // ReasoningEngine is the port used by use cases to ask a model for a typed
 // intent. Concrete providers live in adapters, not in domain or use case code.
@@ -41,11 +44,26 @@ const (
 )
 
 // ReasoningResult is the structured output expected from an agent reasoning
-// step: evidence first, then an auditable rationale, then a typed intent.
+// step: evidence first, then an auditable rationale, then either a typed
+// intent or a set of tool calls. A turn yields one or the other -- when
+// ToolCalls is non-empty the model is asking for information before it can
+// propose a final Intent.
 type ReasoningResult[TIntent any] struct {
 	Evidence  []EvidenceRef `json:"evidence"`
 	Rationale string        `json:"rationale"`
 	Intent    TIntent       `json:"intent"`
+	ToolCalls []ToolCall    `json:"tool_calls,omitempty"`
+}
+
+// ToolCall is the model's request to invoke a named tool mid-reasoning.
+// Args is the raw JSON the model supplied; the tool handler decodes it into
+// its own typed parameters -- the same pattern Decoder uses for an intent,
+// so a tool argument stays a typed contract rather than free-form text. The
+// harness loop never inspects Args or a tool's result, which keeps the tool
+// mechanism generic across features.
+type ToolCall struct {
+	Name string          `json:"name"`
+	Args json.RawMessage `json:"args,omitempty"`
 }
 
 // Decoder turns a provider's raw model output into Stoa's typed result.
@@ -88,6 +106,7 @@ const (
 	EventValidationError EventKind = "validation_error"
 	EventExecutionError  EventKind = "execution_error"
 	EventObservation     EventKind = "observation"
+	EventToolResult      EventKind = "tool_result"
 )
 
 // Observation is the typed result returned by executors after a valid intent is

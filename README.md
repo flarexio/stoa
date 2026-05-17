@@ -245,7 +245,7 @@ An empty `config.yaml` instead selects the all-offline defaults — in-memory le
 
 ## What Stoa is not
 
-- **Not a framework.** You read the code; you own the code.
+- **Not a framework you adopt.** The harness is framework-shaped but small — you read and own the code, never depend on a black box.
 - **Not a LangChain replacement.** Different category entirely.
 - **Not general-purpose.** Start narrow. Generalize when patterns emerge.
 - **Not magic.** Every decision is explicit. Every abstraction earns its place.

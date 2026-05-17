@@ -16,6 +16,7 @@ var (
 	validationStyle  = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("214"))
 	executionStyle   = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("203"))
 	observationStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("78"))
+	toolStyle        = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("45"))
 	systemStyle      = lipgloss.NewStyle().Italic(true).Foreground(lipgloss.Color("245"))
 	errorStyle       = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("203"))
 )
