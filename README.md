@@ -167,6 +167,8 @@ go run ./cmd/stoa tui testdata/scenarios/tavern.json testdata/accounting/aws_bil
 
 Pass one or more scenario files: accounting scenarios become bookkeeper sessions, world scenarios become one npc session per actor. Choose an agent on the start screen, type a request, watch the loop unfold, and press `ctrl+c` to cancel a running turn or quit. The TUI is presentation only — it observes the harness loop through a `harness/loop.EventSink` and reuses the same composition as `book-run` / `npc-run`.
 
+Bookkeeper sessions connect to an already-seeded ledger and never seed on startup — populate the chart of accounts first with [`stoa seed`](seed/README.md). The accounts, branches, and periods in the scenario file are not applied by the TUI; the configured repository is the source of truth.
+
 ---
 
 ## Project layout
