@@ -65,33 +65,33 @@ const (
 // Company is the legal entity that owns the ledger. Branches are reporting
 // dimensions inside the same legal entity, not separate companies.
 type Company struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
+	ID   string `json:"id" yaml:"id"`
+	Name string `json:"name" yaml:"name"`
 }
 
 // Account is one row in the chart of accounts. Inactive accounts cannot be
 // used in new postings.
 type Account struct {
-	Code   string      `json:"code"`
-	Name   string      `json:"name"`
-	Type   AccountType `json:"type"`
-	Active bool        `json:"active"`
+	Code   string      `json:"code" yaml:"code"`
+	Name   string      `json:"name" yaml:"name"`
+	Type   AccountType `json:"type" yaml:"type"`
+	Active bool        `json:"active" yaml:"active"`
 }
 
 // Branch is a reporting dimension within the single ledger. Branches do not
 // own their own books; they tag journal lines for reporting.
 type Branch struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
+	ID   string `json:"id" yaml:"id"`
+	Name string `json:"name" yaml:"name"`
 }
 
 // Period is an accounting period. Closed periods cannot accept postings, so
 // closing a period seals the books for that range.
 type Period struct {
-	ID     string       `json:"id"`
-	Start  time.Time    `json:"start"`
-	End    time.Time    `json:"end"`
-	Status PeriodStatus `json:"status"`
+	ID     string       `json:"id" yaml:"id"`
+	Start  time.Time    `json:"start" yaml:"start"`
+	End    time.Time    `json:"end" yaml:"end"`
+	Status PeriodStatus `json:"status" yaml:"status"`
 }
 
 // Dimensions tag a journal line with reporting cuts. BranchID is the first
