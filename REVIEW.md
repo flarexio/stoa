@@ -37,7 +37,7 @@ checklist of things easy to miss in a PR.
 - **Public contract changes without callers updated.** Touching
   `llm.ReasoningEngine`, `llm.PromptRenderer`, `llm.Decoder`, or
   `harness/loop.Runner` requires the same PR to update every agent
-  package that consumes it (`bookkeeper/`, `npc/`), `llm/openai/`, and
+  package that consumes it (`accounting/agent/`, `world/agent/`), `llm/openai/`, and
   tests.
 - **Domain rule changes without tests.** New or relaxed validation rules
   that ship without both a passing and a failing test case.

@@ -10,7 +10,7 @@ import (
 	"github.com/urfave/cli/v3"
 
 	"github.com/flarexio/stoa/accounting"
-	"github.com/flarexio/stoa/bookkeeper"
+	"github.com/flarexio/stoa/accounting/agent"
 	"github.com/flarexio/stoa/llm"
 )
 
@@ -34,7 +34,7 @@ func newBookRunCommand(stdout io.Writer) *cli.Command {
 		Usage:     "Run a bookkeeping reasoning loop against an accounting scenario JSON file.",
 		ArgsUsage: "<scenario.json>",
 		Description: "Loads an accounting scenario JSON file, seeds the configured repository,\n" +
-			"runs the bookkeeper.Agent loop, and prints a JSON report to stdout. The\n" +
+			"runs the agent.Bookkeeper loop, and prints a JSON report to stdout. The\n" +
 			"binary reads config.yaml from --work-dir, defaulting to ~/.flarex/stoa;\n" +
 			"the file must exist (no implicit in-process fallback). The reasoning\n" +
 			"engine and model come from the config.yaml llm block (engine defaults\n" +
@@ -141,7 +141,7 @@ func runBook(ctx context.Context, c *cli.Command, stdout io.Writer) error {
 	if err != nil {
 		return err
 	}
-	agent := bookkeeper.Agent{
+	agent := agent.Bookkeeper{
 		Engine:    engine,
 		Repo:      repo,
 		Publisher: bus,

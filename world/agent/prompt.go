@@ -1,4 +1,4 @@
-package npc
+package agent
 
 import (
 	"fmt"

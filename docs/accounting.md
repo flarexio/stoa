@@ -3,7 +3,7 @@
 The `accounting/` package is Stoa's bookkeeping conscience. It owns the
 ledger model and the validation rules that any AI-proposed journal entry
 must satisfy before it can be posted. The package is pure: no LLM SDK, no
-harness, no CLI imports. Bookkeeping orchestration lives in `bookkeeper/`,
+harness, no CLI imports. Bookkeeping orchestration lives in `accounting/agent/`,
 which proposes typed `accounting.JournalIntent` values and feeds validation
 errors back to the model for self-correction.
 
@@ -11,7 +11,7 @@ errors back to the model for self-correction.
 
 ```text
 bookkeeping request
-  -> bookkeeper.Agent asks the LLM to propose a JournalIntent
+  -> agent.Bookkeeper asks the LLM to propose a JournalIntent
   -> accounting.Validator enforces the accounting invariants
   -> the validated entry is published as a JournalPosted event
   -> a subscribed handler applies the event to the LedgerRepository projection
@@ -19,7 +19,7 @@ bookkeeping request
 ```
 
 The bookkeeping layer never writes to the projection directly. The
-producer (`bookkeeper.Agent`) only validates and publishes a
+producer (`agent.Bookkeeper`) only validates and publishes a
 `JournalPosted` event; the single writer to the `LedgerRepository`
 projection is the `Apply` handler subscribed to the event bus. See
 `docs/architecture.md` for the event-driven wiring.
@@ -55,7 +55,7 @@ correction cycle can address all problems at once.
 
 ## Posting and immutability
 
-A posted `JournalEntry` is immutable. `bookkeeper.Agent` derives the entry
+A posted `JournalEntry` is immutable. `agent.Bookkeeper` derives the entry
 ID from the broker sequence (`accounting.FormatEntryID(lastSeq+1)`) and
 stamps `PostedAt` via its clock before publishing the `JournalPosted`
 event; the `LedgerRepository.Apply` handler then writes the projection.
@@ -79,7 +79,7 @@ prevents the system from drifting into branch-level shadow accounting.
 ## Running the demo
 
 The `stoa book-run` CLI loads a scenario JSON file, runs the
-`bookkeeper.Agent` loop, and prints a JSON report. It reads `config.yaml`
+`agent.Bookkeeper` loop, and prints a JSON report. It reads `config.yaml`
 from its work directory (`~/.flarex/stoa` by default); an empty file is
 valid and selects the all-offline defaults -- memory persistence,
 in-process event bus, scripted engine.
@@ -105,7 +105,7 @@ OPENAI_API_KEY=sk-... go run ./cmd/stoa book-run \
   --request "Paid AWS bill 100 USD using company credit card on 12 May 2026"
 ```
 
-The prompt rendered for the LLM is built by `bookkeeper.PromptRenderer`,
+The prompt rendered for the LLM is built by `agent.PromptRenderer`,
 which reads the seeded ledger so the model sees the actual active chart
 of accounts, open periods, and known branches. Every constraint named in
 the system prompt is also enforced by `accounting.Validator`, so the LLM

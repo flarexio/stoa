@@ -116,13 +116,13 @@ world situation
 → validation errors feed back as typed events for correction
 ```
 
-The `world/` package owns game entities and rules (no LLM dependency). The `npc/` package owns the use-case loop. Provider adapters live in `llm/openai/` and are swappable.
+The `world/` package owns game entities and rules (no LLM dependency). The `world/agent/` package owns the agent loop. Provider adapters live in `llm/openai/` and are swappable.
 
 A tavern scenario ships in `testdata/scenarios/tavern.json`: Mira is a cautious merchant who owns healing potions; the player has low reputation; north road has bandits. The NPC tests use an equivalent in-code fixture; the JSON file is the reference shape for future demos and loaders.
 
 ### Demo: run an NPC turn from the command line
 
-`cmd/stoa` is a small CLI that loads a scenario JSON file, runs the same `npc.Agent` loop as the tests with a deterministic scripted reasoning engine, and prints a JSON report. No `OPENAI_API_KEY` or network access is required.
+`cmd/stoa` is a small CLI that loads a scenario JSON file, runs the same `agent.NPC` loop as the tests with a deterministic scripted reasoning engine, and prints a JSON report. No `OPENAI_API_KEY` or network access is required.
 
 ```bash
 go run ./cmd/stoa npc-run testdata/scenarios/tavern.json --actor mira
@@ -151,7 +151,7 @@ bookkeeping request
 → validation errors feed back as typed events for self-correction
 ```
 
-`accounting/` owns the domain model — chart of accounts, periods, journal entries, and validation rules — with no LLM dependency. `bookkeeper/` owns the use-case loop and the feature-specific prompt renderer.
+`accounting/` owns the domain model — chart of accounts, periods, journal entries, and validation rules — with no LLM dependency. `accounting/agent/` owns the agent loop and the feature-specific prompt renderer.
 
 `cmd/stoa book-run` runs this loop from the command line; see [`docs/accounting.md`](docs/accounting.md) for the runnable demo and configuration.
 
@@ -181,9 +181,9 @@ stoa/
 │   └── stoa/              # Demo CLI (npc-run, book-run, tui subcommands)
 │       └── tui/           # Bubble Tea conversational UI (presentation only)
 ├── world/                 # Game domain: world state, actors, items, NPCIntent, validator
-├── npc/                   # NPC use-case loop and prompt rendering
+│   └── agent/             # NPC agent loop and prompt rendering
 ├── accounting/            # Accounting domain: ledger, accounts, periods, validator, events
-├── bookkeeper/            # Bookkeeping agent loop, prompt rendering, event ports
+│   └── agent/             # Bookkeeping agent loop, prompt rendering, event ports
 ├── persistence/           # LedgerRepository adapters (memory, postgres)
 ├── messaging/             # EventBus adapters (inproc, nats)
 ├── config/                # config.yaml loader for cmd/stoa
