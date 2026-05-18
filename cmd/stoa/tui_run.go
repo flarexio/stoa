@@ -11,12 +11,12 @@ import (
 	"github.com/urfave/cli/v3"
 
 	"github.com/flarexio/stoa/accounting"
-	"github.com/flarexio/stoa/bookkeeper"
+	bookkeeper "github.com/flarexio/stoa/accounting/agent"
 	"github.com/flarexio/stoa/cmd/stoa/tui"
 	"github.com/flarexio/stoa/config"
 	"github.com/flarexio/stoa/harness/loop"
-	"github.com/flarexio/stoa/npc"
 	"github.com/flarexio/stoa/world"
+	npc "github.com/flarexio/stoa/world/agent"
 )
 
 func newTUICommand() *cli.Command {
@@ -189,7 +189,7 @@ func (comp tuiComposer) bookOption(path string, scenario accounting.Scenario) tu
 				return nil, err
 			}
 			return &bookSession{
-				agent: bookkeeper.Agent{
+				agent: bookkeeper.Bookkeeper{
 					Engine:    engine,
 					Repo:      repo,
 					Publisher: bus,
@@ -211,7 +211,7 @@ func (comp tuiComposer) npcOptions(path string, scenario world.Scenario) []tui.O
 			Hint:  path,
 			Start: func(_ context.Context) (tui.Session, error) {
 				return &npcSession{
-					agent:   npc.Agent{Engine: newScriptedEngine(scenario.State, actorID), MaxTurns: comp.maxTurns},
+					agent:   npc.NPC{Engine: newScriptedEngine(scenario.State, actorID), MaxTurns: comp.maxTurns},
 					actorID: actorID,
 					state:   scenario.State,
 				}, nil
@@ -230,9 +230,9 @@ func scenarioLabel(name, path string) string {
 	return strings.TrimSuffix(filepath.Base(path), filepath.Ext(path))
 }
 
-// bookSession adapts a bookkeeper.Agent to tui.Session.
+// bookSession adapts a bookkeeper.Bookkeeper to tui.Session.
 type bookSession struct {
-	agent   bookkeeper.Agent
+	agent   bookkeeper.Bookkeeper
 	closers []io.Closer
 }
 
@@ -257,9 +257,9 @@ func (s *bookSession) Close() error {
 	return errors.Join(errs...)
 }
 
-// npcSession adapts an npc.Agent to tui.Session.
+// npcSession adapts an npc.NPC to tui.Session.
 type npcSession struct {
-	agent   npc.Agent
+	agent   npc.NPC
 	actorID string
 	state   world.WorldState
 }

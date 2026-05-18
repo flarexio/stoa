@@ -1,4 +1,4 @@
-package bookkeeper_test
+package agent_test
 
 import (
 	"context"
@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"github.com/flarexio/stoa/accounting"
-	"github.com/flarexio/stoa/bookkeeper"
+	"github.com/flarexio/stoa/accounting/agent"
 	"github.com/flarexio/stoa/llm"
 )
 
@@ -46,7 +46,7 @@ func TestAgent_RunsToolCallBeforePosting(t *testing.T) {
 		}, nil
 	})
 
-	agent := bookkeeper.Agent{Engine: engine, Repo: repo, Publisher: bus, Clock: fixedClock, MaxTurns: 3}
+	agent := agent.Bookkeeper{Engine: engine, Repo: repo, Publisher: bus, Clock: fixedClock, MaxTurns: 3}
 	res, err := agent.Book(context.Background(), "Paid the AWS bill on the company credit card")
 	if err != nil {
 		t.Fatalf("Book: %v", err)
@@ -85,7 +85,7 @@ func TestPromptRenderer_SwitchesToToolModeForLargeChart(t *testing.T) {
 		return accounts
 	}
 
-	small := bookkeeper.PromptRenderer{Accounts: mk(3)}
+	small := agent.PromptRenderer{Accounts: mk(3)}
 	msgs, err := small.Render(llm.ReasoningInput{Task: "x"})
 	if err != nil {
 		t.Fatal(err)
@@ -97,7 +97,7 @@ func TestPromptRenderer_SwitchesToToolModeForLargeChart(t *testing.T) {
 		t.Error("a small chart should list the accounts in the prompt")
 	}
 
-	large := bookkeeper.PromptRenderer{Accounts: mk(20)}
+	large := agent.PromptRenderer{Accounts: mk(20)}
 	msgs, err = large.Render(llm.ReasoningInput{Task: "x"})
 	if err != nil {
 		t.Fatal(err)

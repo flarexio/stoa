@@ -25,7 +25,7 @@
 // mutating the original.
 //
 // This invariant also gives Entry.ID a clean meaning: it is assigned
-// once by the producing agent (see bookkeeper.Agent) as
+// once by the producing agent (see agent.Bookkeeper) as
 // FormatEntryID(repo.LastSequence(subject) + 1) just before Publish,
 // the transport carries it through the wire unchanged, and the broker's
 // optimistic-concurrency check rejects any racing producer that

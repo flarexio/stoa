@@ -1,4 +1,4 @@
-package npc_test
+package agent_test
 
 import (
 	"context"
@@ -7,8 +7,8 @@ import (
 
 	"github.com/flarexio/stoa/harness/loop"
 	"github.com/flarexio/stoa/llm"
-	"github.com/flarexio/stoa/npc"
 	"github.com/flarexio/stoa/world"
+	"github.com/flarexio/stoa/world/agent"
 )
 
 type fakeEngineFunc func(ctx context.Context, input llm.ReasoningInput) (llm.ReasoningResult[world.NPCIntent], error)
@@ -64,7 +64,7 @@ func TestAgent_ValidActionExecution(t *testing.T) {
 		}, nil
 	})
 
-	agent := npc.Agent{Engine: engine, MaxTurns: 3}
+	agent := agent.NPC{Engine: engine, MaxTurns: 3}
 	res, err := agent.Act(context.Background(), actorID, w, "Player approaches Mira's stall.")
 	if err != nil {
 		t.Fatalf("expected success, got %v", err)
@@ -116,7 +116,7 @@ func TestAgent_CorrectsAfterValidationFeedback(t *testing.T) {
 		}
 	})
 
-	agent := npc.Agent{Engine: engine, MaxTurns: 3}
+	agent := agent.NPC{Engine: engine, MaxTurns: 3}
 	res, err := agent.Act(context.Background(), actorID, w, "Player asks Mira for a magic sword.")
 	if err != nil {
 		t.Fatalf("expected success after correction, got %v", err)
@@ -139,7 +139,7 @@ func TestAgent_GivesUpAfterMaxTurns(t *testing.T) {
 		}, nil
 	})
 
-	agent := npc.Agent{Engine: engine, MaxTurns: 2}
+	agent := agent.NPC{Engine: engine, MaxTurns: 2}
 	_, err := agent.Act(context.Background(), actorID, w, "What does Mira do?")
 	if !errors.Is(err, loop.ErrMaxTurnsExceeded) {
 		t.Fatalf("expected ErrMaxTurnsExceeded, got %v", err)

@@ -1,4 +1,4 @@
-package bookkeeper_test
+package agent_test
 
 import (
 	"context"
@@ -6,13 +6,13 @@ import (
 	"testing"
 
 	"github.com/flarexio/stoa/accounting"
-	"github.com/flarexio/stoa/bookkeeper"
+	"github.com/flarexio/stoa/accounting/agent"
 	"github.com/flarexio/stoa/llm"
 )
 
 func TestPromptRenderer_IncludesActiveAccountsAndOpenPeriods(t *testing.T) {
 	scenario, repo := awsBillScenario(t)
-	renderer, err := bookkeeper.NewPromptRenderer(context.Background(), scenario.Company, repo)
+	renderer, err := agent.NewPromptRenderer(context.Background(), scenario.Company, repo)
 	if err != nil {
 		t.Fatalf("new renderer: %v", err)
 	}
@@ -62,7 +62,7 @@ func TestPromptRenderer_IncludesActiveAccountsAndOpenPeriods(t *testing.T) {
 
 func TestPromptRenderer_AppendsValidationFeedbackAsMessages(t *testing.T) {
 	scenario, repo := awsBillScenario(t)
-	renderer, err := bookkeeper.NewPromptRenderer(context.Background(), scenario.Company, repo)
+	renderer, err := agent.NewPromptRenderer(context.Background(), scenario.Company, repo)
 	if err != nil {
 		t.Fatalf("new renderer: %v", err)
 	}
@@ -92,7 +92,7 @@ func TestPromptRenderer_AppendsValidationFeedbackAsMessages(t *testing.T) {
 }
 
 func TestNewPromptRenderer_NilRepo(t *testing.T) {
-	if _, err := bookkeeper.NewPromptRenderer(context.Background(), accounting.Company{}, nil); err == nil {
+	if _, err := agent.NewPromptRenderer(context.Background(), accounting.Company{}, nil); err == nil {
 		t.Fatal("expected error when constructing renderer with nil repository")
 	}
 }

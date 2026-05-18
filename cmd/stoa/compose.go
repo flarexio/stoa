@@ -16,7 +16,7 @@ import (
 	"path/filepath"
 
 	"github.com/flarexio/stoa/accounting"
-	"github.com/flarexio/stoa/bookkeeper"
+	"github.com/flarexio/stoa/accounting/agent"
 	"github.com/flarexio/stoa/config"
 	"github.com/flarexio/stoa/llm"
 	"github.com/flarexio/stoa/llm/openai"
@@ -61,15 +61,15 @@ func buildRepository(ctx context.Context, cfg config.Persistence) (accounting.Le
 	}
 }
 
-// buildMessaging materialises the bookkeeper.EventBus chosen by cfg and
+// buildMessaging materialises the agent.EventBus chosen by cfg and
 // subscribes a single handler that applies events to repo. The bus's
 // Close method tears down whichever transport was opened.
-func buildMessaging(ctx context.Context, cfg config.Messaging, repo accounting.LedgerRepository) (bookkeeper.EventBus, error) {
+func buildMessaging(ctx context.Context, cfg config.Messaging, repo accounting.LedgerRepository) (agent.EventBus, error) {
 	bus, err := openBus(ctx, cfg)
 	if err != nil {
 		return nil, err
 	}
-	apply := bookkeeper.EventHandlerFunc(func(ctx context.Context, evt accounting.JournalPosted) error {
+	apply := agent.EventHandlerFunc(func(ctx context.Context, evt accounting.JournalPosted) error {
 		return repo.Apply(ctx, evt)
 	})
 	if err := bus.Subscribe(apply); err != nil {
@@ -80,7 +80,7 @@ func buildMessaging(ctx context.Context, cfg config.Messaging, repo accounting.L
 }
 
 // openBus opens the EventBus chosen by cfg without subscribing yet.
-func openBus(ctx context.Context, cfg config.Messaging) (bookkeeper.EventBus, error) {
+func openBus(ctx context.Context, cfg config.Messaging) (agent.EventBus, error) {
 	switch cfg.Kind {
 	case config.MessagingInproc:
 		return inproc.NewAccountingBus(), nil
@@ -129,7 +129,7 @@ func buildBookEngine(ctx context.Context, kind string, scenario accounting.Scena
 		}
 		return newScriptedBookEngine(repo, amount, currency), nil
 	case "openai":
-		renderer, err := bookkeeper.NewPromptRenderer(ctx, scenario.Company, repo)
+		renderer, err := agent.NewPromptRenderer(ctx, scenario.Company, repo)
 		if err != nil {
 			return nil, fmt.Errorf("book-run: openai engine: %w", err)
 		}

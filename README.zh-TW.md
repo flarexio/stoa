@@ -112,13 +112,13 @@ Stoa 目前的主要方向，是證明一個由大型語言模型驅動的 NPC�
 → 驗證錯誤以具型別事件回饋給下一輪推理
 ```
 
-`world/` 套件擁有遊戲實體與規則（不依賴 LLM）。`npc/` 套件擁有使用案例迴圈。`llm/openai/` 是可替換的供應商轉接器。
+`world/` 套件擁有遊戲實體與規則（不依賴 LLM）。`world/agent/` 套件擁有代理迴圈。`llm/openai/` 是可替換的供應商轉接器。
 
 `testdata/scenarios/tavern.json` 是參考酒館場景：謹慎的商人 Mira 持有治療藥水；玩家對她聲望不佳；北邊的路上有強盜。
 
 ### 範例：從命令列跑一次 NPC 推理
 
-`cmd/stoa` 是一支小型 CLI，會載入場景 JSON，使用與測試相同的 `npc.Agent` 迴圈搭配確定性的腳本化推理引擎，最後輸出一份 JSON 報告。不需要 `OPENAI_API_KEY` 或網路。
+`cmd/stoa` 是一支小型 CLI，會載入場景 JSON，使用與測試相同的 `agent.NPC` 迴圈搭配確定性的腳本化推理引擎，最後輸出一份 JSON 報告。不需要 `OPENAI_API_KEY` 或網路。
 
 ```bash
 go run ./cmd/stoa npc-run testdata/scenarios/tavern.json --actor mira
@@ -147,7 +147,7 @@ go run ./cmd/stoa npc-run testdata/scenarios/tavern.json --actor mira
 → 驗證錯誤以具型別事件回饋以供自我修正
 ```
 
-`accounting/` 擁有領域模型——科目表、會計期間、分錄和驗證規則——不依賴任何 LLM。`bookkeeper/` 擁有使用案例迴圈和功能專屬的提示詞渲染器。
+`accounting/` 擁有領域模型——科目表、會計期間、分錄和驗證規則——不依賴任何 LLM。`accounting/agent/` 擁有代理迴圈和功能專屬的提示詞渲染器。
 
 `cmd/stoa book-run` 可從命令列跑這個迴圈；可執行的範例與設定方式見 [`docs/accounting.md`](docs/accounting.md)。
 
@@ -177,9 +177,9 @@ stoa/
 │   └── stoa/              # 範例 CLI（npc-run、book-run、tui 子指令）
 │       └── tui/           # Bubble Tea 對話式介面（僅負責呈現）
 ├── world/                 # 遊戲領域：世界狀態、角色、物品、NPCIntent、驗證器
-├── npc/                   # NPC 使用案例迴圈與提示詞渲染
+│   └── agent/             # NPC 代理迴圈與提示詞渲染
 ├── accounting/            # 會計領域：帳本、科目、期間、驗證器、事件
-├── bookkeeper/            # 記帳代理迴圈、提示詞渲染、事件 port
+│   └── agent/             # 記帳代理迴圈、提示詞渲染、事件 port
 ├── persistence/           # LedgerRepository 轉接器（memory、postgres）
 ├── messaging/             # EventBus 轉接器（inproc、nats）
 ├── config/                # cmd/stoa 的 config.yaml 載入器

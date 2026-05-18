@@ -7,8 +7,8 @@ Stoa is a Go workshop for building production-grade AI agents. It is not a frame
 The name comes from the Greek στοά (covered colonnade), connecting Stoic philosophy (control what you can) with Wang Yangming's 知行合一 (unity of knowing and doing).
 
 ### Feature domains
-- **NPC harness** (`world/`, `npc/`): LLM-driven game NPC that proposes typed intents validated by hard game rules. Demo: `stoa npc-run testdata/scenarios/tavern.json --actor mira`.
-- **Bookkeeping agent** (`accounting/`, `bookkeeper/`): turns natural-language requests into validated double-entry journal entries, published as `JournalPosted` events and projected into a ledger repository. Domain rules and invariants in `docs/accounting.md`. Demo: `stoa book-run testdata/accounting/aws_bill.json --request "..."`.
+- **NPC harness** (`world/`, `world/agent/`): LLM-driven game NPC that proposes typed intents validated by hard game rules. Demo: `stoa npc-run testdata/scenarios/tavern.json --actor mira`.
+- **Bookkeeping agent** (`accounting/`, `accounting/agent/`): turns natural-language requests into validated double-entry journal entries, published as `JournalPosted` events and projected into a ledger repository. Domain rules and invariants in `docs/accounting.md`. Demo: `stoa book-run testdata/accounting/aws_bill.json --request "..."`.
 
 ## Architecture (Clean Architecture)
 Dependencies flow inward. Code is organized **by feature**.

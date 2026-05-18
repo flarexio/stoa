@@ -1,4 +1,4 @@
-package bookkeeper_test
+package agent_test
 
 import (
 	"context"
@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/flarexio/stoa/accounting"
-	"github.com/flarexio/stoa/bookkeeper"
+	"github.com/flarexio/stoa/accounting/agent"
 	"github.com/flarexio/stoa/llm"
 	"github.com/flarexio/stoa/messaging/inproc"
 	"github.com/flarexio/stoa/persistence/memory"
@@ -22,7 +22,7 @@ func (f fakeEngineFunc) Predict(ctx context.Context, input llm.ReasoningInput) (
 // awsBillRepo seeds an in-memory repository from the testdata fixture.
 func awsBillRepo(t *testing.T) accounting.LedgerRepository {
 	t.Helper()
-	scenario, err := accounting.LoadScenarioFile("../testdata/accounting/aws_bill.json")
+	scenario, err := accounting.LoadScenarioFile("../../testdata/accounting/aws_bill.json")
 	if err != nil {
 		t.Fatalf("load fixture: %v", err)
 	}
@@ -38,7 +38,7 @@ func awsBillRepo(t *testing.T) accounting.LedgerRepository {
 // have to reload the file.
 func awsBillScenario(t *testing.T) (accounting.Scenario, accounting.LedgerRepository) {
 	t.Helper()
-	scenario, err := accounting.LoadScenarioFile("../testdata/accounting/aws_bill.json")
+	scenario, err := accounting.LoadScenarioFile("../../testdata/accounting/aws_bill.json")
 	if err != nil {
 		t.Fatalf("load fixture: %v", err)
 	}
@@ -52,10 +52,10 @@ func awsBillScenario(t *testing.T) (accounting.Scenario, accounting.LedgerReposi
 // wireBus subscribes the standard apply handler so the bus's published
 // events land in the repo's projection. Returned as a convenience for
 // test setup.
-func wireBus(t *testing.T, repo accounting.LedgerRepository) bookkeeper.EventBus {
+func wireBus(t *testing.T, repo accounting.LedgerRepository) agent.EventBus {
 	t.Helper()
 	bus := inproc.NewAccountingBus()
-	if err := bus.Subscribe(bookkeeper.EventHandlerFunc(func(ctx context.Context, evt accounting.JournalPosted) error {
+	if err := bus.Subscribe(agent.EventHandlerFunc(func(ctx context.Context, evt accounting.JournalPosted) error {
 		return repo.Apply(ctx, evt)
 	})); err != nil {
 		t.Fatalf("subscribe: %v", err)
@@ -91,7 +91,7 @@ func TestAgent_PostsBalancedJournal(t *testing.T) {
 		}, nil
 	})
 
-	agent := bookkeeper.Agent{
+	agent := agent.Bookkeeper{
 		Engine:    engine,
 		Repo:      repo,
 		Publisher: bus,
@@ -152,7 +152,7 @@ func TestAgent_CorrectsAfterValidationFeedback(t *testing.T) {
 		}
 	})
 
-	agent := bookkeeper.Agent{Engine: engine, Repo: repo, Publisher: bus, Clock: fixedClock, MaxTurns: 3}
+	agent := agent.Bookkeeper{Engine: engine, Repo: repo, Publisher: bus, Clock: fixedClock, MaxTurns: 3}
 	res, err := agent.Book(context.Background(), "Paid AWS bill 100 USD using company credit card")
 	if err != nil {
 		t.Fatalf("expected success after correction, got %v", err)
@@ -186,7 +186,7 @@ func TestAgent_RejectsClosedPeriodIntent(t *testing.T) {
 		}, nil
 	})
 
-	agent := bookkeeper.Agent{Engine: engine, Repo: repo, Publisher: bus, Clock: fixedClock, MaxTurns: 3}
+	agent := agent.Bookkeeper{Engine: engine, Repo: repo, Publisher: bus, Clock: fixedClock, MaxTurns: 3}
 	res, err := agent.Book(context.Background(), "Record April AWS bill late")
 	if err != nil {
 		t.Fatalf("expected success after correcting to open period, got %v", err)
@@ -203,7 +203,7 @@ func TestAgent_SequentialIDsAcrossPosts(t *testing.T) {
 	engine := fakeEngineFunc(func(_ context.Context, _ llm.ReasoningInput) (llm.ReasoningResult[accounting.JournalIntent], error) {
 		return llm.ReasoningResult[accounting.JournalIntent]{Intent: balancedAWSIntent()}, nil
 	})
-	agent := bookkeeper.Agent{Engine: engine, Repo: repo, Publisher: bus, Clock: fixedClock, MaxTurns: 3}
+	agent := agent.Bookkeeper{Engine: engine, Repo: repo, Publisher: bus, Clock: fixedClock, MaxTurns: 3}
 
 	a, err := agent.Book(context.Background(), "first")
 	if err != nil {
@@ -226,7 +226,7 @@ func TestAgent_ClosedPeriodMidSessionBlocksFurtherPosts(t *testing.T) {
 	engine := fakeEngineFunc(func(_ context.Context, _ llm.ReasoningInput) (llm.ReasoningResult[accounting.JournalIntent], error) {
 		return llm.ReasoningResult[accounting.JournalIntent]{Intent: balancedAWSIntent()}, nil
 	})
-	agent := bookkeeper.Agent{Engine: engine, Repo: repo, Publisher: bus, Clock: fixedClock, MaxTurns: 1}
+	agent := agent.Bookkeeper{Engine: engine, Repo: repo, Publisher: bus, Clock: fixedClock, MaxTurns: 1}
 
 	if _, err := agent.Book(ctx, "first post should succeed"); err != nil {
 		t.Fatalf("first post: %v", err)
@@ -247,7 +247,7 @@ func TestAgent_ClosedPeriodMidSessionBlocksFurtherPosts(t *testing.T) {
 func TestAgent_MissingEngine(t *testing.T) {
 	repo := awsBillRepo(t)
 	bus := wireBus(t, repo)
-	agent := bookkeeper.Agent{Repo: repo, Publisher: bus}
+	agent := agent.Bookkeeper{Repo: repo, Publisher: bus}
 	if _, err := agent.Book(context.Background(), "x"); err == nil {
 		t.Fatal("expected error for missing engine")
 	}
@@ -258,7 +258,7 @@ func TestAgent_MissingRepo(t *testing.T) {
 	engine := fakeEngineFunc(func(_ context.Context, _ llm.ReasoningInput) (llm.ReasoningResult[accounting.JournalIntent], error) {
 		return llm.ReasoningResult[accounting.JournalIntent]{}, nil
 	})
-	agent := bookkeeper.Agent{Engine: engine, Publisher: bus}
+	agent := agent.Bookkeeper{Engine: engine, Publisher: bus}
 	if _, err := agent.Book(context.Background(), "x"); err == nil {
 		t.Fatal("expected error for missing repository")
 	}
@@ -269,7 +269,7 @@ func TestAgent_MissingPublisher(t *testing.T) {
 	engine := fakeEngineFunc(func(_ context.Context, _ llm.ReasoningInput) (llm.ReasoningResult[accounting.JournalIntent], error) {
 		return llm.ReasoningResult[accounting.JournalIntent]{}, nil
 	})
-	agent := bookkeeper.Agent{Engine: engine, Repo: repo}
+	agent := agent.Bookkeeper{Engine: engine, Repo: repo}
 	if _, err := agent.Book(context.Background(), "x"); err == nil {
 		t.Fatal("expected error for missing publisher")
 	}

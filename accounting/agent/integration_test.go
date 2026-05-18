@@ -1,4 +1,4 @@
-package bookkeeper_test
+package agent_test
 
 import (
 	"context"
@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/flarexio/stoa/accounting"
-	"github.com/flarexio/stoa/bookkeeper"
+	"github.com/flarexio/stoa/accounting/agent"
 	"github.com/flarexio/stoa/llm/openai"
 )
 
@@ -27,7 +27,7 @@ func TestAgent_OpenAI(t *testing.T) {
 	scenario, repo := awsBillScenario(t)
 	bus := wireBus(t, repo)
 
-	renderer, err := bookkeeper.NewPromptRenderer(context.Background(), scenario.Company, repo)
+	renderer, err := agent.NewPromptRenderer(context.Background(), scenario.Company, repo)
 	if err != nil {
 		t.Fatalf("new renderer: %v", err)
 	}
@@ -42,7 +42,7 @@ func TestAgent_OpenAI(t *testing.T) {
 		t.Fatalf("new adapter: %v", err)
 	}
 
-	agent := bookkeeper.Agent{
+	agent := agent.Bookkeeper{
 		Engine:    engine,
 		Repo:      repo,
 		Publisher: bus,

@@ -1,4 +1,4 @@
-// Package bookkeeper is the bookkeeping use-case package. It wires the
+// Package agent runs the bookkeeping agent. It wires the
 // accounting domain through the harness loop: the LLM proposes an
 // accounting.JournalIntent, the accounting Validator enforces ledger
 // invariants against a LedgerRepository, and the bookkeeper publishes a
@@ -6,7 +6,7 @@
 // EventHandler applies the event to the projection. The bookkeeper never
 // writes to the repository itself, so the publish path is the single
 // authoritative place a posted entry comes into being.
-package bookkeeper
+package agent
 
 import (
 	"context"
@@ -21,20 +21,20 @@ import (
 
 // SubjectLedger is the default subject the bookkeeping agent publishes
 // JournalPosted events on for optimistic-concurrency scoping. Override
-// it via Agent.Subject when multiple ledgers share a transport.
+// it via Bookkeeper.Subject when multiple ledgers share a transport.
 const SubjectLedger = "accounting.journal"
 
 // Clock returns the time a posted journal entry is stamped with. Default
 // is time.Now().UTC(); tests inject a deterministic clock through
-// Agent.Clock.
+// Bookkeeper.Clock.
 type Clock func() time.Time
 
-// Agent runs one bookkeeping decision: a natural-language request is
+// Bookkeeper runs one bookkeeping decision: a natural-language request is
 // turned into a typed JournalIntent, validated against the
 // LedgerRepository, and published as a JournalPosted event. Producers
 // never call repo.Apply; that is the consumer's job and runs inside the
 // EventHandler subscribed to the publisher.
-type Agent struct {
+type Bookkeeper struct {
 	Engine    llm.ReasoningEngine[accounting.JournalIntent]
 	Repo      accounting.LedgerRepository
 	Publisher EventPublisher
@@ -55,7 +55,7 @@ type Result struct {
 
 // Book runs the reason -> validate -> publish loop for the given
 // bookkeeping request.
-func (a Agent) Book(ctx context.Context, request string) (Result, error) {
+func (a Bookkeeper) Book(ctx context.Context, request string) (Result, error) {
 	if a.Engine == nil {
 		return Result{}, errors.New("bookkeeper: agent has no reasoning engine")
 	}

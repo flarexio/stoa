@@ -10,8 +10,8 @@ import (
 	"github.com/urfave/cli/v3"
 
 	"github.com/flarexio/stoa/llm"
-	"github.com/flarexio/stoa/npc"
 	"github.com/flarexio/stoa/world"
+	"github.com/flarexio/stoa/world/agent"
 )
 
 // runOutput is the machine-readable JSON document the CLI prints on success.
@@ -32,7 +32,7 @@ func newNPCRunCommand(stdout io.Writer) *cli.Command {
 		Name:      "npc-run",
 		Usage:     "Run an NPC reasoning loop against a scenario JSON file.",
 		ArgsUsage: "<scenario.json>",
-		Description: "Loads a scenario JSON file, runs the npc.Agent loop with a deterministic\n" +
+		Description: "Loads a scenario JSON file, runs the agent.NPC loop with a deterministic\n" +
 			"scripted reasoning engine, and prints a JSON report to stdout. The scripted\n" +
 			"engine first proposes an invalid intent so the demo exercises Stoa's\n" +
 			"validation-feedback self-correction loop.",
@@ -84,7 +84,7 @@ func runNPC(ctx context.Context, c *cli.Command, stdout io.Writer) error {
 	}
 
 	engine := newScriptedEngine(scenario.State, actor)
-	agent := npc.Agent{Engine: engine, MaxTurns: maxTurns}
+	agent := agent.NPC{Engine: engine, MaxTurns: maxTurns}
 
 	res, runErr := agent.Act(ctx, actor, scenario.State, taskText)
 
