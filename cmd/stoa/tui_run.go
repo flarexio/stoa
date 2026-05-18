@@ -28,7 +28,8 @@ func newTUICommand() *cli.Command {
 			"execute loop the book-run / npc-run commands use. Pass one or more scenario\n" +
 			"JSON files: accounting scenarios become bookkeeper sessions, world scenarios\n" +
 			"become one npc session per actor. Bookkeeper sessions read config.yaml from\n" +
-			"--work-dir (default ~/.flarex/stoa); npc sessions need no config.",
+			"--work-dir (default ~/.flarex/stoa) and connect to a ledger already seeded\n" +
+			"by `stoa seed` -- the TUI never seeds on startup; npc sessions need no config.",
 		Flags: []cli.Flag{
 			&cli.StringFlag{
 				Name:  "engine",
@@ -150,6 +151,12 @@ type tuiComposer struct {
 // bookOption builds a selectable bookkeeper session for an accounting
 // scenario. The repository, bus, and engine are composed lazily inside
 // Start, when the user actually picks the option.
+//
+// The TUI is a live front-end: it connects to a ledger that has already
+// been seeded out of band by `stoa seed`, and never seeds on startup.
+// The accounts, branches, and periods in the scenario file are not
+// applied here -- the repository is the source of truth. An empty
+// repository (no open period below) means the seed step was skipped.
 func (comp tuiComposer) bookOption(path string, scenario accounting.Scenario) tui.Option {
 	return tui.Option{
 		Label: "bookkeeper · " + scenarioLabel(scenario.Name, path),
@@ -164,11 +171,6 @@ func (comp tuiComposer) bookOption(path string, scenario accounting.Scenario) tu
 				repoCloser.Close()
 				return nil, err
 			}
-			if err := scenario.Seed(ctx, repo); err != nil {
-				bus.Close()
-				repoCloser.Close()
-				return nil, err
-			}
 			period, err := firstOpenPeriod(ctx, repo)
 			if err != nil {
 				bus.Close()
@@ -178,7 +180,7 @@ func (comp tuiComposer) bookOption(path string, scenario accounting.Scenario) tu
 			if period.ID == "" {
 				bus.Close()
 				repoCloser.Close()
-				return nil, fmt.Errorf("tui: %s has no open period", path)
+				return nil, fmt.Errorf("tui: ledger has no open period; run `stoa seed` first")
 			}
 			engine, err := buildBookEngine(ctx, comp.engineKind, scenario, repo, comp.amount, comp.currency, comp.model)
 			if err != nil {

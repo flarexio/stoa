@@ -163,6 +163,8 @@ go run ./cmd/stoa tui testdata/scenarios/tavern.json testdata/accounting/aws_bil
 
 傳入一個或多個場景檔：會計場景成為 bookkeeper session，world 場景則為每個角色各開一個 npc session。在起始畫面選一個代理、輸入請求、看著迴圈展開，`ctrl+c` 可取消執行中的回合或離開。TUI 只負責呈現——它透過 `harness/loop.EventSink` 觀察 harness 迴圈，並重用與 `book-run` / `npc-run` 相同的組裝邏輯。
 
+Bookkeeper session 連接到一個已經 seed 過的 ledger，啟動時不會自行 seed——請先用 [`stoa seed`](seed/README.md) 建立會計科目表。場景檔裡的會計科目、分支機構與會計期間不會被 TUI 套用；以設定檔指定的儲存庫為準。
+
 ---
 
 ## 專案結構
