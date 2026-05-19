@@ -5,10 +5,10 @@ import (
 	"sync"
 
 	"github.com/flarexio/stoa/accounting"
-	"github.com/flarexio/stoa/accounting/usecase"
+	"github.com/flarexio/stoa/accounting/bookkeeping"
 )
 
-// accountingBus is an in-process usecase.EventBus for the accounting
+// accountingBus is an in-process bookkeeping.EventBus for the accounting
 // domain. It dispatches every published event synchronously to all
 // subscribed handlers under a single mutex, so Publish returns only
 // after every handler has finished. That makes the bus suitable for
@@ -27,21 +27,21 @@ type accountingBus struct {
 	mu        sync.Mutex
 	streamSeq uint64
 	lastSubj  map[string]uint64
-	handlers  []usecase.EventHandler
+	handlers  []bookkeeping.EventHandler
 }
 
-// NewAccountingBus returns an empty in-process usecase.EventBus for
+// NewAccountingBus returns an empty in-process bookkeeping.EventBus for
 // JournalPosted events.
-func NewAccountingBus() usecase.EventBus {
+func NewAccountingBus() bookkeeping.EventBus {
 	return &accountingBus{lastSubj: make(map[string]uint64)}
 }
 
 // Subscribe registers handler to receive every subsequent JournalPosted
 // published through the bus. Handlers run in registration order under
 // the calling goroutine; the bus has no fan-out concurrency. The error
-// return exists to match usecase.EventSubscriber; this transport
+// return exists to match bookkeeping.EventSubscriber; this transport
 // never errors on registration.
-func (b *accountingBus) Subscribe(handler usecase.EventHandler) error {
+func (b *accountingBus) Subscribe(handler bookkeeping.EventHandler) error {
 	b.mu.Lock()
 	b.handlers = append(b.handlers, handler)
 	b.mu.Unlock()
@@ -50,7 +50,7 @@ func (b *accountingBus) Subscribe(handler usecase.EventHandler) error {
 
 // Close releases any resources the bus owns. The in-process bus owns
 // nothing, so Close is a no-op that exists only to satisfy
-// usecase.EventBus.
+// bookkeeping.EventBus.
 func (b *accountingBus) Close() error {
 	return nil
 }
@@ -75,7 +75,7 @@ func (b *accountingBus) Publish(ctx context.Context, evt accounting.JournalPoste
 	if expect.Subject != "" {
 		b.lastSubj[expect.Subject] = seq
 	}
-	handlers := append([]usecase.EventHandler(nil), b.handlers...)
+	handlers := append([]bookkeeping.EventHandler(nil), b.handlers...)
 	b.mu.Unlock()
 
 	evt.Subject = expect.Subject

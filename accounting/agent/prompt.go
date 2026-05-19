@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/flarexio/stoa/accounting"
+	"github.com/flarexio/stoa/accounting/bookkeeping"
 	"github.com/flarexio/stoa/llm"
 )
 
@@ -105,7 +106,7 @@ func (r PromptRenderer) buildUserPrompt(input llm.ReasoningInput) string {
 		b.WriteString(branches)
 	}
 
-	b.WriteString("\nNotes:\n")
+	b.WriteString("\nNotes for post_journal:\n")
 	b.WriteString("  - amount is an integer in minor currency units. $100 USD = 10000.\n")
 	b.WriteString("  - include at least two lines with one or more debits and one or more credits; total debit must equal total credit.\n")
 	b.WriteString("  - date must be RFC3339 (e.g. 2026-05-12T00:00:00Z) and fall inside the chosen period.\n")
@@ -116,17 +117,20 @@ func (r PromptRenderer) buildUserPrompt(input llm.ReasoningInput) string {
 	}
 	b.WriteString("  - pick period_id only from the open periods above.\n")
 
+	b.WriteString("\nAvailable intents -- choose exactly one:\n")
+	b.WriteString(intentsText())
+
 	if toolMode {
 		b.WriteString("\nTool -- find_accounts: search the chart of accounts by name.\n")
 		b.WriteString("  args: " + findAccountsArgsShape + "\n")
 		b.WriteString("\nEach turn, return JSON in ONE of these two shapes.\n")
 		b.WriteString("To look up accounts:\n")
 		b.WriteString(toolCallJSONShape + "\n")
-		b.WriteString("To post the entry once you have the codes:\n")
-		b.WriteString(intentJSONShape)
+		b.WriteString("To run a command:\n")
+		b.WriteString(intentEnvelopeShape)
 	} else {
 		b.WriteString("\nReturn JSON with this exact shape:\n")
-		b.WriteString(intentJSONShape)
+		b.WriteString(intentEnvelopeShape)
 	}
 
 	return b.String()
@@ -172,8 +176,21 @@ const (
 
 	toolCallJSONShape = `{"evidence":[{"source":"request","fact":"..."}],"rationale":"...","tool_calls":[{"name":"find_accounts","args":{"name_contains":"rent"}}]}`
 
-	intentJSONShape = `{"evidence":[{"source":"chart_of_accounts","fact":"..."}],"rationale":"...","intent":{"date":"2026-05-12T00:00:00Z","period_id":"<period_id>","currency":"USD","description":"...","lines":[{"account_code":"<code>","side":"debit","amount":10000,"memo":"...","dimensions":{"branch_id":"<branch_id>"}},{"account_code":"<code>","side":"credit","amount":10000,"memo":"...","dimensions":{}}]}}`
+	intentEnvelopeShape = `{"evidence":[{"source":"...","fact":"..."}],"rationale":"...","intent":<one command intent object from the list above>}`
 )
+
+// intentsText renders the bookkeeping intent menu from bookkeeping.Intents(),
+// so the model's options stay in lockstep with the use cases the Registry
+// can route. Each intent gets its purpose and the exact JSON body that
+// selects it.
+func intentsText() string {
+	var b strings.Builder
+	for _, c := range bookkeeping.Intents() {
+		fmt.Fprintf(&b, "  - %s -- %s\n", c.Kind, c.Summary)
+		fmt.Fprintf(&b, "      intent: {\"kind\":%q,%q:%s}\n", c.Kind, c.Kind, c.ArgsShape)
+	}
+	return b.String()
+}
 
 func (r PromptRenderer) activeAccounts() string {
 	sorted := append([]accounting.Account(nil), r.Accounts...)
@@ -215,11 +232,9 @@ func (r PromptRenderer) branchesText() string {
 }
 
 const bookkeeperSystemPrompt = `You are a bookkeeping reasoning engine in a validated agent harness.
+Each turn you choose ONE intent and return it as a typed intent:
+- post_journal: post a new journal entry. Include at least two lines; total debit must equal total credit; use only active account codes; reference an open period_id and a date inside it; use one currency throughout.
+- reverse_journal: reverse an existing posted entry. Supply the entry's JE-id and a short reason; the mirror-image entry is built and validated for you.
 Rules you must follow:
-- Propose a typed accounting.JournalIntent for the requested transaction.
-- Include at least two lines; total debit must equal total credit.
-- Use only active account_code values from the chart of accounts.
-- Reference an open period_id and a date inside that period.
-- Use the same currency on the whole entry.
 - If validation feedback is present, fix only the named problems and resubmit.
 - Output JSON only. No prose outside the JSON object.`

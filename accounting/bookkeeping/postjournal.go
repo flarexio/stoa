@@ -1,9 +1,9 @@
 // Package usecase holds the bookkeeping use cases -- the application-layer
-// operations that validate and execute a typed command against the
+// operations that validate and execute a typed intent against the
 // accounting domain. A use case carries no LLM dependency: the agent
 // drives it through the harness loop, but a REST handler, a batch job, or
 // a test can call Handle directly.
-package usecase
+package bookkeeping
 
 import (
 	"context"
@@ -49,10 +49,10 @@ func (uc PostJournal) Validate(ctx context.Context, intent accounting.JournalInt
 // has not validated first must use Handle.
 func (uc PostJournal) Execute(ctx context.Context, intent accounting.JournalIntent) (accounting.JournalEntry, error) {
 	if uc.Repo == nil {
-		return accounting.JournalEntry{}, errors.New("usecase: post journal has no repository")
+		return accounting.JournalEntry{}, errors.New("bookkeeping: post journal has no repository")
 	}
 	if uc.Publisher == nil {
-		return accounting.JournalEntry{}, errors.New("usecase: post journal has no event publisher")
+		return accounting.JournalEntry{}, errors.New("bookkeeping: post journal has no event publisher")
 	}
 
 	subject := uc.Subject
@@ -78,7 +78,7 @@ func (uc PostJournal) Execute(ctx context.Context, intent accounting.JournalInte
 	// the publish failed.
 	lastSeq, err := uc.Repo.LastSequence(ctx, subject)
 	if err != nil {
-		return accounting.JournalEntry{}, fmt.Errorf("usecase: read last sequence: %w", err)
+		return accounting.JournalEntry{}, fmt.Errorf("bookkeeping: read last sequence: %w", err)
 	}
 
 	entry := accounting.JournalEntry{
@@ -96,7 +96,7 @@ func (uc PostJournal) Execute(ctx context.Context, intent accounting.JournalInte
 		LastSeq: lastSeq,
 	})
 	if err != nil {
-		return accounting.JournalEntry{}, fmt.Errorf("usecase: publish: %w", err)
+		return accounting.JournalEntry{}, fmt.Errorf("bookkeeping: publish: %w", err)
 	}
 	return dispatched.Entry, nil
 }

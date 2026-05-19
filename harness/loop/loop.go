@@ -219,7 +219,7 @@ func (r Runner[TIntent]) executionFormatter() FeedbackFormatter {
 }
 
 func modelOutputEvent[TIntent any](reasoning llm.ReasoningResult[TIntent]) llm.CycleEvent {
-	detail := fmt.Sprintf("intent: %#v", reasoning.Intent)
+	detail := "intent: " + formatIntent(reasoning.Intent)
 	if len(reasoning.ToolCalls) > 0 {
 		calls := make([]string, len(reasoning.ToolCalls))
 		for i, c := range reasoning.ToolCalls {
@@ -232,6 +232,18 @@ func modelOutputEvent[TIntent any](reasoning llm.ReasoningResult[TIntent]) llm.C
 		Kind:    llm.EventModelOutput,
 		Content: fmt.Sprintf("rationale: %s\n%s", reasoning.Rationale, detail),
 	}
+}
+
+// formatIntent renders a proposed intent for a model_output event. JSON
+// keeps the rendering deterministic and readable across intent types --
+// including a discriminated-union intent whose %#v would expose
+// non-deterministic pointer addresses. It falls back to %#v only for an
+// intent that cannot be marshalled.
+func formatIntent[TIntent any](intent TIntent) string {
+	if b, err := json.Marshal(intent); err == nil {
+		return string(b)
+	}
+	return fmt.Sprintf("%#v", intent)
 }
 
 func validationErrorEvent(err error, format FeedbackFormatter) llm.CycleEvent {

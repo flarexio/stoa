@@ -17,7 +17,7 @@ import (
 
 	"github.com/flarexio/stoa/accounting"
 	"github.com/flarexio/stoa/accounting/agent"
-	"github.com/flarexio/stoa/accounting/usecase"
+	"github.com/flarexio/stoa/accounting/bookkeeping"
 	"github.com/flarexio/stoa/config"
 	"github.com/flarexio/stoa/llm"
 	"github.com/flarexio/stoa/llm/openai"
@@ -62,15 +62,15 @@ func buildRepository(ctx context.Context, cfg config.Persistence) (accounting.Le
 	}
 }
 
-// buildMessaging materialises the usecase.EventBus chosen by cfg and
+// buildMessaging materialises the bookkeeping.EventBus chosen by cfg and
 // subscribes a single handler that applies events to repo. The bus's
 // Close method tears down whichever transport was opened.
-func buildMessaging(ctx context.Context, cfg config.Messaging, repo accounting.LedgerRepository) (usecase.EventBus, error) {
+func buildMessaging(ctx context.Context, cfg config.Messaging, repo accounting.LedgerRepository) (bookkeeping.EventBus, error) {
 	bus, err := openBus(ctx, cfg)
 	if err != nil {
 		return nil, err
 	}
-	apply := usecase.EventHandlerFunc(func(ctx context.Context, evt accounting.JournalPosted) error {
+	apply := bookkeeping.EventHandlerFunc(func(ctx context.Context, evt accounting.JournalPosted) error {
 		return repo.Apply(ctx, evt)
 	})
 	if err := bus.Subscribe(apply); err != nil {
@@ -81,7 +81,7 @@ func buildMessaging(ctx context.Context, cfg config.Messaging, repo accounting.L
 }
 
 // openBus opens the EventBus chosen by cfg without subscribing yet.
-func openBus(ctx context.Context, cfg config.Messaging) (usecase.EventBus, error) {
+func openBus(ctx context.Context, cfg config.Messaging) (bookkeeping.EventBus, error) {
 	switch cfg.Kind {
 	case config.MessagingInproc:
 		return inproc.NewAccountingBus(), nil
@@ -111,7 +111,7 @@ func (noopCloser) Close() error { return nil }
 // buildBookEngine selects the reasoning engine the CLI feeds to the
 // bookkeeper agent. The scripted engine is offline and deterministic; the
 // openai engine drives a real LLM through the same harness loop.
-func buildBookEngine(ctx context.Context, kind string, scenario accounting.Scenario, repo accounting.LedgerRepository, amount int64, currency, model string) (llm.ReasoningEngine[accounting.JournalIntent], error) {
+func buildBookEngine(ctx context.Context, kind string, scenario accounting.Scenario, repo accounting.LedgerRepository, amount int64, currency, model string) (llm.ReasoningEngine[bookkeeping.Intent], error) {
 	switch kind {
 	case "", "scripted":
 		expense, err := firstActiveAccount(ctx, repo, accounting.AccountExpense)
@@ -134,7 +134,7 @@ func buildBookEngine(ctx context.Context, kind string, scenario accounting.Scena
 		if err != nil {
 			return nil, fmt.Errorf("book-run: openai engine: %w", err)
 		}
-		adapter, err := openai.NewAdapter(openai.Config[accounting.JournalIntent]{
+		adapter, err := openai.NewAdapter(openai.Config[bookkeeping.Intent]{
 			Model:        model,
 			OutputFormat: openai.OutputFormatJSONObject,
 			Renderer:     renderer,
