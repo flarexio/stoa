@@ -1,8 +1,7 @@
-// Package usecase holds the bookkeeping use cases -- the application-layer
-// operations that validate and execute a typed intent against the
-// accounting domain. A use case carries no LLM dependency: the agent
-// drives it through the harness loop, but a REST handler, a batch job, or
-// a test can call Handle directly.
+// Package bookkeeping holds the accounting application operations that
+// validate and execute typed intents without depending on an LLM. The agent
+// drives these operations through the harness loop, but a REST handler,
+// batch job, or test can call Handle directly.
 package bookkeeping
 
 import (

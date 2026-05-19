@@ -129,7 +129,7 @@ go run ./cmd/stoa book-run testdata/accounting/aws_bill.json \
 # environment and a model -- via --model or the config.yaml llm block;
 # the adapter assumes no default. --amount / --currency are ignored in
 # this mode; the LLM reads both from the request.
-OPENAI_API_KEY=sk-... go run ./cmd/stoa book-run \
+OPENAI_API_KEY="<your-api-key>" go run ./cmd/stoa book-run \
   testdata/accounting/aws_bill.json \
   --engine openai \
   --model gpt-5.4-mini \

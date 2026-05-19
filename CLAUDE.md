@@ -1,3 +1,5 @@
 # Claude Code Guide
 
-Please refer to [AGENTS.md](./AGENTS.md) for project-wide development standards, build commands, and architectural rules.
+Read `AGENTS.md` first; it is the project-wide source of truth for architecture, commands, and agent rules.
+
+For cleanup or review tasks, do not stop after the first safe edit. Inspect the requested areas, update stale docs and comments, and report which areas were reviewed even when no change was needed.

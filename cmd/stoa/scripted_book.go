@@ -56,7 +56,7 @@ func (e *scriptedBookEngine) Predict(ctx context.Context, input llm.ReasoningInp
 
 // postIntent wraps a JournalIntent as a post_journal intent. The offline
 // scripted engine only ever posts -- reverse_journal is exercised by the
-// usecase tests and reachable through the live openai engine.
+// bookkeeping tests and reachable through the live openai engine.
 func postIntent(intent accounting.JournalIntent) bookkeeping.Intent {
 	return bookkeeping.Intent{Kind: bookkeeping.IntentPostJournal, Post: &intent}
 }

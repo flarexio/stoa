@@ -173,7 +173,7 @@ Bookkeeper sessions connect to an already-seeded ledger and never seed on startu
 
 ## Project layout
 
-Stoa organizes code **by feature**, not by architectural layer. A feature is a domain package at its root with nested subpackages — an agent loop, and a use-case layer when an operation is worth running without an LLM — so domain models remain independently importable while the agent loop stays explicit.
+Stoa organizes code **by feature**, not by architectural layer. A feature is a domain package at its root with nested subpackages for the agent loop and any application operations worth running without an LLM. In this repo, accounting calls that operation package `bookkeeping/` because it owns bookkeeping-specific commands, registry, and event ports.
 
 ```
 stoa/
@@ -183,7 +183,7 @@ stoa/
 ├── world/                 # Game domain: world state, actors, items, NPCIntent, validator
 │   └── agent/             # NPC agent loop and prompt rendering
 ├── accounting/            # Accounting domain: ledger, accounts, periods, validator, events
-│   ├── usecase/           # PostJournal/ReverseJournal use cases, command registry, event ports
+│   ├── bookkeeping/       # PostJournal/ReverseJournal operations, Intent registry, event ports
 │   └── agent/             # Bookkeeping agent loop and prompt rendering
 ├── persistence/           # LedgerRepository adapters (memory, postgres)
 ├── messaging/             # EventBus adapters (inproc, nats)

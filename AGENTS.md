@@ -7,8 +7,8 @@ Stoa is a Go workshop for building production-grade AI agents. It is not a frame
 The name comes from the Greek στοά (covered colonnade), connecting Stoic philosophy (control what you can) with Wang Yangming's 知行合一 (unity of knowing and doing).
 
 ### Feature domains
-- **NPC harness** (`world/`, `world/agent/`): LLM-driven game NPC that proposes typed intents validated by hard game rules. Demo: `stoa npc-run testdata/scenarios/tavern.json --actor mira`.
-- **Bookkeeping agent** (`accounting/`, `accounting/bookkeeping/`, `accounting/agent/`): turns a natural-language request into a typed `bookkeeping.Intent` and routes it through a use-case registry -- `post_journal` posts a validated double-entry journal entry, `reverse_journal` reverses an existing one -- publishing each as a `JournalPosted` event projected into a ledger repository. Domain rules and invariants in `docs/accounting.md`. Demo: `stoa book-run testdata/accounting/aws_bill.json --request "..."`.
+- **NPC harness** (`world/`, `world/agent/`): LLM-driven game NPC that proposes typed intents validated by hard game rules. Demo: `go run ./cmd/stoa npc-run testdata/scenarios/tavern.json --actor mira`.
+- **Bookkeeping agent** (`accounting/`, `accounting/bookkeeping/`, `accounting/agent/`): turns a natural-language request into a typed `bookkeeping.Intent` and routes it through a use-case registry -- `post_journal` posts a validated double-entry journal entry, `reverse_journal` reverses an existing one -- publishing each as a `JournalPosted` event projected into a ledger repository. Domain rules and invariants in `docs/accounting.md`. Demo: `go run ./cmd/stoa book-run testdata/accounting/aws_bill.json --request "..."`.
 
 ## Architecture (Clean Architecture)
 Dependencies flow inward. Code is organized **by feature**.
@@ -39,8 +39,13 @@ To ensure "Knowing and Doing are One", every agent must follow this cycle:
 - **Go-first**: Type system as contract, implicit interfaces, and high performance.
 - **Harness engineering**: Validation, retry with context, and circuit breakers are mandatory.
 
+## Comment and Documentation Hygiene
+- Prefer comments that explain domain rules, invariants, boundaries, or non-obvious behavior.
+- Do not keep comments only to satisfy style convention; remove or rewrite comments that merely restate names or obvious code.
+- Keep README, AGENTS, CLAUDE, and docs aligned with actual package names and runnable commands.
+
 ## Release Workflow
-- If an AI agent performs a release, preserve the agent attribution in the commit metadata as a `Co-Author`.
+- If an AI agent performs a release, preserve attribution with a standard `Co-Authored-By:` trailer.
 - Some tools add this automatically; for tools that do not, the agent must add it explicitly instead of omitting it.
 
 ## Current LLM Contract

@@ -169,7 +169,7 @@ Bookkeeper session 連接到一個已經 seed 過的 ledger，啟動時不會自
 
 ## 專案結構
 
-Stoa 依照**功能切片**組織程式碼，而不是依照架構層級。每個功能以領域套件為根，底下嵌套子套件——一個代理迴圈，以及當某個操作值得在沒有 LLM 的情況下執行時的 use-case 層——讓領域模型可以獨立被匯入，同時讓代理迴圈保持明確。
+Stoa 依照**功能切片**組織程式碼，而不是依照架構層級。每個功能以領域套件為根，底下嵌套代理迴圈，以及值得在沒有 LLM 時獨立執行的 application operation。這個 repo 的會計切片把該層命名為 `bookkeeping/`，因為它擁有記帳命令、registry 與事件 port。
 
 ```text
 stoa/
@@ -179,7 +179,7 @@ stoa/
 ├── world/                 # 遊戲領域：世界狀態、角色、物品、NPCIntent、驗證器
 │   └── agent/             # NPC 代理迴圈與提示詞渲染
 ├── accounting/            # 會計領域：帳本、科目、期間、驗證器、事件
-│   ├── usecase/           # PostJournal/ReverseJournal use case、command registry、事件 port
+│   ├── bookkeeping/       # PostJournal/ReverseJournal 操作、Intent registry、事件 port
 │   └── agent/             # 記帳代理迴圈與提示詞渲染
 ├── persistence/           # LedgerRepository 轉接器（memory、postgres）
 ├── messaging/             # EventBus 轉接器（inproc、nats）
