@@ -27,6 +27,7 @@ func seedConfigBody(t *testing.T, body string) {
 	t.Helper()
 	home := t.TempDir()
 	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
 	dir := filepath.Join(home, ".flarex", "stoa")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatalf("mkdir default config dir: %v", err)
@@ -53,6 +54,7 @@ func isolateHome(t *testing.T) string {
 	t.Helper()
 	home := t.TempDir()
 	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
 	return home
 }
 
@@ -87,9 +89,9 @@ func TestRunBook_AWSBillSelfCorrects(t *testing.T) {
 	if rep.Entry.PeriodID != "2026-05" {
 		t.Errorf("expected entry posted to open period 2026-05, got %q", rep.Entry.PeriodID)
 	}
-	post := rep.Command.Post
+	post := rep.Intent.Post
 	if post == nil {
-		t.Fatalf("expected a post_journal command, got kind %q", rep.Command.Kind)
+		t.Fatalf("expected a post_journal intent, got kind %q", rep.Intent.Kind)
 	}
 	if post.Lines[0].Amount != post.Lines[1].Amount {
 		t.Errorf("final intent should be balanced, got %d vs %d",
@@ -332,9 +334,9 @@ func TestRunBook_CustomAmount(t *testing.T) {
 	if err := json.Unmarshal(stdout.Bytes(), &rep); err != nil {
 		t.Fatalf("output is not valid JSON: %v", err)
 	}
-	post := rep.Command.Post
+	post := rep.Intent.Post
 	if post == nil {
-		t.Fatalf("expected a post_journal command, got kind %q", rep.Command.Kind)
+		t.Fatalf("expected a post_journal intent, got kind %q", rep.Intent.Kind)
 	}
 	if post.Lines[0].Amount != 50000 {
 		t.Errorf("debit amount: want 50000, got %d", post.Lines[0].Amount)

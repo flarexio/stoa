@@ -141,17 +141,17 @@ Use `--task` to override the in-world prompt and `--max-turns` to bound the loop
 
 ## Example: bookkeeping agent
 
-The accounting slice applies the same architecture to double-entry bookkeeping. A natural-language request is turned into a typed `usecase.Command` — the model picks `post_journal` to record a new entry or `reverse_journal` to reverse one — and the use-case registry routes it. `post_journal` carries a `JournalIntent`; `reverse_journal` carries a `ReverseCommand` that resolves to a new `JournalIntent` before validation. Only a balanced, period-correct, account-valid entry is posted to the ledger.
+The accounting slice applies the same architecture to double-entry bookkeeping. A natural-language request is turned into a typed intent — the model picks `post_journal` to record a new entry or `reverse_journal` to reverse one — and the use-case registry routes it. `post_journal` carries a `JournalIntent`; `reverse_journal` carries a `ReverseIntent` that resolves to a new `JournalIntent` before validation. Only a balanced, period-correct, account-valid entry is posted to the ledger.
 
 ```text
 bookkeeping request
-→ LLM proposes a usecase.Command (post_journal or reverse_journal)
+→ LLM proposes a typed intent (post_journal or reverse_journal)
 → the use-case registry routes it; accounting.Validator enforces the invariants
 → a validated entry is published as a JournalPosted event and projected into the ledger
 → validation errors feed back as typed events for self-correction
 ```
 
-`accounting/` owns the domain model — chart of accounts, periods, journal entries, and validation rules — with no LLM dependency. `accounting/usecase/` owns the `PostJournal` and `ReverseJournal` operations (validate-then-execute, callable without an LLM), the `Command` union and registry that route to them, and the event-transport ports. `post_journal` carries a `JournalIntent`, while `reverse_journal` carries a `ReverseCommand` that resolves to a `JournalIntent` before validation. `accounting/agent/` owns the agent loop and the feature-specific prompt renderer.
+`accounting/` owns the domain model — chart of accounts, periods, journal entries, and validation rules — with no LLM dependency. `accounting/usecase/` owns the `PostJournal` and `ReverseJournal` operations (validate-then-execute, callable without an LLM), the `Command` union and registry that route to them, and the event-transport ports. `post_journal` carries a `JournalIntent`, while `reverse_journal` carries a `ReverseIntent` that resolves to a `JournalIntent` before validation. `accounting/agent/` owns the agent loop and the feature-specific prompt renderer.
 
 `cmd/stoa book-run` runs this loop from the command line; see [`docs/accounting.md`](docs/accounting.md) for the runnable demo and configuration.
 

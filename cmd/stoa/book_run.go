@@ -18,15 +18,15 @@ import (
 // bookRunOutput is the machine-readable JSON document the CLI prints on
 // success.
 type bookRunOutput struct {
-	Scenario    string                  `json:"scenario,omitempty"`
-	Description string                  `json:"description,omitempty"`
-	Request     string                  `json:"request"`
-	Turns       int                     `json:"turns"`
-	Command     usecase.Command         `json:"command"`
-	Entry       accounting.JournalEntry `json:"entry"`
-	Observation llm.Observation         `json:"observation"`
-	Events      []llm.CycleEvent        `json:"events"`
-	Feedback    []string                `json:"feedback"`
+	Scenario    string                    `json:"scenario,omitempty"`
+	Description string                    `json:"description,omitempty"`
+	Request     string                    `json:"request"`
+	Turns       int                       `json:"turns"`
+	Intent      usecase.BookkeepingIntent `json:"intent"`
+	Entry       accounting.JournalEntry   `json:"entry"`
+	Observation llm.Observation           `json:"observation"`
+	Events      []llm.CycleEvent          `json:"events"`
+	Feedback    []string                  `json:"feedback"`
 }
 
 func newBookRunCommand(stdout io.Writer) *cli.Command {
@@ -156,7 +156,7 @@ func runBook(ctx context.Context, c *cli.Command, stdout io.Writer) error {
 		Description: scenario.Description,
 		Request:     request,
 		Turns:       res.Turns,
-		Command:     res.Command,
+		Intent:      res.Intent,
 		Entry:       res.Entry,
 		Observation: res.Observation,
 		Events:      res.Events,

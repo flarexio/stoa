@@ -33,7 +33,7 @@ func TestAgent_OpenAI(t *testing.T) {
 		t.Fatalf("new renderer: %v", err)
 	}
 
-	engine, err := openai.NewAdapter(openai.Config[usecase.Command]{
+	engine, err := openai.NewAdapter(openai.Config[usecase.BookkeepingIntent]{
 		APIKey:       apiKey,
 		Model:        "gpt-5.4-mini",
 		OutputFormat: openai.OutputFormatJSONObject,

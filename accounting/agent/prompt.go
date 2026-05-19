@@ -117,8 +117,8 @@ func (r PromptRenderer) buildUserPrompt(input llm.ReasoningInput) string {
 	}
 	b.WriteString("  - pick period_id only from the open periods above.\n")
 
-	b.WriteString("\nAvailable commands -- choose exactly one:\n")
-	b.WriteString(commandsText())
+	b.WriteString("\nAvailable intents -- choose exactly one:\n")
+	b.WriteString(intentsText())
 
 	if toolMode {
 		b.WriteString("\nTool -- find_accounts: search the chart of accounts by name.\n")
@@ -179,13 +179,13 @@ const (
 	intentEnvelopeShape = `{"evidence":[{"source":"...","fact":"..."}],"rationale":"...","intent":<one command intent object from the list above>}`
 )
 
-// commandsText renders the bookkeeping command menu from usecase.Commands(),
+// intentsText renders the bookkeeping intent menu from usecase.Intents(),
 // so the model's options stay in lockstep with the use cases the Registry
-// can route. Each command gets its purpose and the exact JSON command body
-// that selects it.
-func commandsText() string {
+// can route. Each intent gets its purpose and the exact JSON body that
+// selects it.
+func intentsText() string {
 	var b strings.Builder
-	for _, c := range usecase.Commands() {
+	for _, c := range usecase.Intents() {
 		fmt.Fprintf(&b, "  - %s -- %s\n", c.Kind, c.Summary)
 		fmt.Fprintf(&b, "      intent: {\"kind\":%q,%q:%s}\n", c.Kind, c.Kind, c.ArgsShape)
 	}
@@ -232,7 +232,7 @@ func (r PromptRenderer) branchesText() string {
 }
 
 const bookkeeperSystemPrompt = `You are a bookkeeping reasoning engine in a validated agent harness.
-Each turn you choose ONE command and return it as a typed command:
+Each turn you choose ONE intent and return it as a typed intent:
 - post_journal: post a new journal entry. Include at least two lines; total debit must equal total credit; use only active account codes; reference an open period_id and a date inside it; use one currency throughout.
 - reverse_journal: reverse an existing posted entry. Supply the entry's JE-id and a short reason; the mirror-image entry is built and validated for you.
 Rules you must follow:

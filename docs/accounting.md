@@ -6,16 +6,16 @@ must satisfy before it can be posted. The package is pure: no LLM SDK, no
 harness, no CLI imports. The application operations live in
 `accounting/usecase/`, each callable without an LLM: `PostJournal` posts a
 new entry and `ReverseJournal` reverses an existing one. `accounting/agent/`
-drives them through the harness loop -- it proposes a typed `usecase.Command`
+drives them through the harness loop -- it proposes a typed `usecase.BookkeepingIntent`
 and feeds validation errors back to the model for self-correction.
 
 ## Flow
 
 ```text
 bookkeeping request
-  -> agent.Bookkeeper asks the LLM to propose a usecase.Command
+  -> agent.Bookkeeper asks the LLM to propose a usecase.BookkeepingIntent
      (post_journal or reverse_journal)
-  -> the usecase.Registry routes the command to its use case
+  -> the usecase.Registry routes the intent to its use case
   -> accounting.Validator enforces the accounting invariants
   -> the validated entry is published as a JournalPosted event
   -> a subscribed handler applies the event to the LedgerRepository projection
@@ -57,28 +57,28 @@ depends on floating-point comparison.
 `Validator.Validate` joins every violation with `errors.Join` so a single
 correction cycle can address all problems at once.
 
-## Use cases and commands
+## Use cases and intents
 
 `accounting/usecase/` holds the application operations. Each is a plain
 Go type with `Validate` / `Execute` / `Handle` methods and no LLM
 dependency, so a REST handler, a batch job, or a test drives one as
 directly as the agent does:
 
-| Use case        | Command          | What it does                                              |
+| Use case        | Intent           | What it does                                              |
 | --------------- | ---------------- | --------------------------------------------------------- |
 | `PostJournal`   | `post_journal`   | Posts a new balanced double-entry journal entry.          |
 | `ReverseJournal`| `reverse_journal`| Reverses a posted entry with a mirror-image entry.        |
 
-`usecase.Command` is the discriminated union the agent's model emits: a
+`usecase.BookkeepingIntent` is the discriminated union the agent's model emits: a
 `kind` plus the payload that kind selects. `usecase.Registry` is dumb
 dispatch -- it maps a `kind` to its use case's validate / execute pair, so
 one agent and one harness loop route to every use case. Adding a use case
 is one more route in `NewBookkeepingRegistry` and one more entry in
-`Commands()` (the prompt's command menu); a registry test asserts the two
+`Intents()` (the prompt's intent menu); a registry test asserts the two
 never drift.
 
 `post_journal` carries a `JournalIntent`, which is a journal-shaped draft
-of one entry. `reverse_journal` carries a `ReverseCommand`, which is an
+of one entry. `reverse_journal` carries a `ReverseIntent`, which is an
 operation request that resolves to a new `JournalIntent` before the same
 domain validator runs.
 
@@ -89,8 +89,8 @@ entry ID from the broker sequence (`accounting.FormatEntryID(lastSeq+1)`)
 and stamps `PostedAt` via its clock before publishing the `JournalPosted`
 event; the `LedgerRepository.Apply` handler then writes the projection.
 The entry is never edited afterwards -- corrections are posted as new
-reversing entries (the `reverse_journal` command), never as in-place
-edits. A reversal command is resolved into a mirror-image `JournalIntent`
+reversing entries (the `reverse_journal` intent), never as in-place
+edits. A reversal intent is resolved into a mirror-image `JournalIntent`
 and then validated and executed through the same journal posting path.
 This is a double-entry-bookkeeping invariant (SOX / GAAP / IFRS all
 require the audit trail to be preserved verbatim), documented in full in

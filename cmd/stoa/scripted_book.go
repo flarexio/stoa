@@ -26,39 +26,39 @@ func newScriptedBookEngine(repo accounting.LedgerRepository, amount int64, curre
 	return &scriptedBookEngine{repo: repo, amount: amount, currency: currency}
 }
 
-func (e *scriptedBookEngine) Predict(ctx context.Context, input llm.ReasoningInput) (llm.ReasoningResult[usecase.Command], error) {
+func (e *scriptedBookEngine) Predict(ctx context.Context, input llm.ReasoningInput) (llm.ReasoningResult[usecase.BookkeepingIntent], error) {
 	if hasValidationFeedback(input.Events) {
 		intent, rationale, err := e.recover(ctx)
 		if err != nil {
-			return llm.ReasoningResult[usecase.Command]{}, err
+			return llm.ReasoningResult[usecase.BookkeepingIntent]{}, err
 		}
-		return llm.ReasoningResult[usecase.Command]{
+		return llm.ReasoningResult[usecase.BookkeepingIntent]{
 			Evidence: []llm.EvidenceRef{
 				{Source: "validator", Fact: "previous intent failed validation; rebalancing credit to match debit"},
 			},
 			Rationale: rationale,
-			Intent:    postCommand(intent),
+			Intent:    postIntent(intent),
 		}, nil
 	}
 
 	intent, rationale, err := e.firstAttempt(ctx)
 	if err != nil {
-		return llm.ReasoningResult[usecase.Command]{}, err
+		return llm.ReasoningResult[usecase.BookkeepingIntent]{}, err
 	}
-	return llm.ReasoningResult[usecase.Command]{
+	return llm.ReasoningResult[usecase.BookkeepingIntent]{
 		Evidence: []llm.EvidenceRef{
 			{Source: "scenario", Fact: "first attempt: drafted from the bookkeeping request"},
 		},
 		Rationale: rationale,
-		Intent:    postCommand(intent),
+		Intent:    postIntent(intent),
 	}, nil
 }
 
-// postCommand wraps a JournalIntent as a post_journal Command. The offline
+// postIntent wraps a JournalIntent as a post_journal intent. The offline
 // scripted engine only ever posts -- reverse_journal is exercised by the
 // usecase tests and reachable through the live openai engine.
-func postCommand(intent accounting.JournalIntent) usecase.Command {
-	return usecase.Command{Kind: usecase.CommandPostJournal, Post: &intent}
+func postIntent(intent accounting.JournalIntent) usecase.BookkeepingIntent {
+	return usecase.BookkeepingIntent{Kind: usecase.IntentPostJournal, Post: &intent}
 }
 
 func (e *scriptedBookEngine) firstAttempt(ctx context.Context) (accounting.JournalIntent, string, error) {
