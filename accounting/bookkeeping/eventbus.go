@@ -35,7 +35,6 @@ type EventHandler interface {
 // declaring a named type.
 type EventHandlerFunc func(ctx context.Context, evt accounting.JournalPosted) error
 
-// Handle satisfies EventHandler.
 func (f EventHandlerFunc) Handle(ctx context.Context, evt accounting.JournalPosted) error {
 	return f(ctx, evt)
 }

@@ -45,7 +45,7 @@ Dependencies point inward. Runtime calls can cross outward through interfaces, b
 
 ## Feature Slice Layout
 
-Each feature is a domain package at the feature root with nested subpackages for the layers that operate on it: an `agent/` subpackage for the LLM-driven loop and, when the feature has application operations worth running without an LLM, a `usecase/` subpackage between them. The split keeps domain types independently importable so other agents, handoff receivers, or offline batch validators can consume them without pulling any LLM code, and keeps each use case callable by a REST handler or a batch job, not only by the agent.
+Each feature is a domain package at the feature root with nested subpackages for the layers that operate on it: an `agent/` subpackage for the LLM-driven loop and, when the feature has application operations worth running without an LLM, an operations subpackage (named for the domain, e.g. `bookkeeping/` for accounting) between them. The split keeps domain types independently importable so other agents, handoff receivers, or offline batch validators can consume them without pulling any LLM code, and keeps each use case callable by a REST handler or a batch job, not only by the agent.
 
 ```text
 stoa/
@@ -54,12 +54,12 @@ stoa/
     <port>.go           # Domain port interface(s); ports are stdlib-only
     event.go            # Typed domain events when the feature is event-driven
     <domain>_test.go
-    usecase/            # Application operations on <domain>; no LLM dependency
-      <usecase>.go      # A validate + execute operation callable without an LLM
+    <operations>/       # Application operations on <domain>; no LLM dependency
+      <operation>.go    # A validate + execute operation callable without an LLM
       eventbus.go       # Transport ports (EventPublisher/Subscriber/Bus) when event-driven
-      <usecase>_test.go
+      <operation>_test.go
     agent/              # The LLM-driven loop that drives the use cases
-      agent.go          # Orchestration (imports <domain>, <domain>/usecase, llm, harness/loop)
+      agent.go          # Orchestration (imports <domain>, <domain>/<operations>, llm, harness/loop)
       prompt.go         # Feature-specific provider-neutral PromptRenderer
       agent_test.go
       integration_test.go
@@ -223,6 +223,7 @@ type CycleEvent struct {
 }
 
 const (
+	EventTask            EventKind = "task"
 	EventModelOutput     EventKind = "model_output"
 	EventValidationError EventKind = "validation_error"
 	EventExecutionError  EventKind = "execution_error"

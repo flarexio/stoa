@@ -46,6 +46,7 @@ depends on floating-point comparison.
 ## Invariants enforced by `Validator`
 
 - `currency` is present.
+- `date` is non-zero and falls within the period start/end range (when the period enforces date bounds).
 - `period_id` is present, the period exists, and the period is open.
 - Each journal entry has at least two lines.
 - Each line's amount is positive.
@@ -132,7 +133,7 @@ go run ./cmd/stoa book-run testdata/accounting/aws_bill.json \
 OPENAI_API_KEY=sk-... go run ./cmd/stoa book-run \
   testdata/accounting/aws_bill.json \
   --engine openai \
-  --model gpt-5.4-mini \
+  --model gpt-4.1-mini \
   --request "Paid AWS bill 100 USD using company credit card on 12 May 2026"
 ```
 
