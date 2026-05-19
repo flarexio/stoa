@@ -12,22 +12,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"time"
 
 	"github.com/flarexio/stoa/accounting"
+	"github.com/flarexio/stoa/accounting/usecase"
 	"github.com/flarexio/stoa/harness/loop"
 	"github.com/flarexio/stoa/llm"
 )
-
-// SubjectLedger is the default subject the bookkeeping agent publishes
-// JournalPosted events on for optimistic-concurrency scoping. Override
-// it via Bookkeeper.Subject when multiple ledgers share a transport.
-const SubjectLedger = "accounting.journal"
-
-// Clock returns the time a posted journal entry is stamped with. Default
-// is time.Now().UTC(); tests inject a deterministic clock through
-// Bookkeeper.Clock.
-type Clock func() time.Time
 
 // Bookkeeper runs one bookkeeping decision: a natural-language request is
 // turned into a typed JournalIntent, validated against the
@@ -37,9 +27,9 @@ type Clock func() time.Time
 type Bookkeeper struct {
 	Engine    llm.ReasoningEngine[accounting.JournalIntent]
 	Repo      accounting.LedgerRepository
-	Publisher EventPublisher
+	Publisher usecase.EventPublisher
 	Subject   string
-	Clock     Clock
+	Clock     usecase.Clock
 	MaxTurns  int
 	Sink      loop.EventSink
 }
@@ -66,69 +56,37 @@ func (a Bookkeeper) Book(ctx context.Context, request string) (Result, error) {
 		return Result{}, errors.New("bookkeeper: agent has no event publisher")
 	}
 
-	subject := a.Subject
-	if subject == "" {
-		subject = SubjectLedger
-	}
-	clock := a.Clock
-	if clock == nil {
-		clock = func() time.Time { return time.Now().UTC() }
+	uc := usecase.PostJournal{
+		Repo:      a.Repo,
+		Publisher: a.Publisher,
+		Clock:     a.Clock,
+		Subject:   a.Subject,
 	}
 
-	validator := accounting.Validator{Repo: a.Repo}
-
+	// The use case owns validate + execute. The agent only adapts the
+	// posted entry into the llm.Observation the harness loop feeds back
+	// to the model; a non-LLM caller would call uc.Handle instead.
 	var posted accounting.JournalEntry
 	executor := loop.ExecutorFunc[accounting.JournalIntent](func(ctx context.Context, intent accounting.JournalIntent) (llm.Observation, error) {
-		// lastSeq is read here both as the broker's optimistic-concurrency
-		// expectation and as the dense counter for the entry's identity:
-		// because Apply writes the entry row and bumps subject_offsets in
-		// the same transaction, MAX(sequence) and last_sequence are
-		// guaranteed equal, and lastSeq+1 is the sequence the broker
-		// will assign on a successful publish. The agent therefore picks
-		// the entry's ID right here, before publishing, and the
-		// transport carries the ID through the wire unchanged. If
-		// another producer wins the race the broker rejects this
-		// publish with accounting.ErrConcurrentUpdate, the loop retries
-		// with a freshly read lastSeq, and a new ID is assigned -- no
-		// duplicate entry can take this ID because the publish failed.
-		lastSeq, err := a.Repo.LastSequence(ctx, subject)
+		entry, err := uc.Execute(ctx, intent)
 		if err != nil {
-			return llm.Observation{}, fmt.Errorf("bookkeeper: read last sequence: %w", err)
+			return llm.Observation{}, err
 		}
-
-		entry := accounting.JournalEntry{
-			ID:          accounting.FormatEntryID(lastSeq + 1),
-			Date:        intent.Date,
-			PeriodID:    intent.PeriodID,
-			Currency:    intent.Currency,
-			Description: intent.Description,
-			Lines:       intent.Lines,
-			PostedAt:    clock(),
-		}
-
-		dispatched, err := a.Publisher.Publish(ctx, accounting.JournalPosted{Entry: entry}, accounting.ExpectedSequence{
-			Subject: subject,
-			LastSeq: lastSeq,
-		})
-		if err != nil {
-			return llm.Observation{}, fmt.Errorf("bookkeeper: publish: %w", err)
-		}
-
-		posted = dispatched.Entry
+		posted = entry
 		return llm.Observation{
 			Summary: fmt.Sprintf("Posted journal entry %s for %s with %d line(s).",
-				posted.ID, posted.Description, len(posted.Lines)),
+				entry.ID, entry.Description, len(entry.Lines)),
 			Fields: map[string]string{
-				"entry_id":  posted.ID,
-				"period_id": posted.PeriodID,
-				"currency":  posted.Currency,
+				"entry_id":  entry.ID,
+				"period_id": entry.PeriodID,
+				"currency":  entry.Currency,
 			},
 		}, nil
 	})
 
 	runner := loop.Runner[accounting.JournalIntent]{
 		Engine:    a.Engine,
-		Validator: validator,
+		Validator: uc,
 		Executor:  executor,
 		Tools:     accountTools(a.Repo),
 		MaxTurns:  a.MaxTurns,

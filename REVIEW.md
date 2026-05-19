@@ -16,8 +16,9 @@ checklist of things easy to miss in a PR.
 ## What to flag
 
 - **Wrong-direction imports.** A domain package importing `llm/`, its own
-  agent package, or any provider SDK. `harness/` importing a provider SDK.
-  `llm/` importing a feature-specific package.
+  `usecase/` or `agent/` subpackage, or any provider SDK. A `usecase/`
+  package importing its sibling `agent/` or any LLM code. `harness/`
+  importing a provider SDK. `llm/` importing a feature-specific package.
 - **Rules in prompts that should be validators.** If a constraint can be
   checked in pure Go, it must not live only in a system prompt string.
 - **Untyped handoffs.** Free-form strings passed between agents where a

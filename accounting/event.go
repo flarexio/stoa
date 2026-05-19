@@ -38,7 +38,7 @@ type JournalPosted struct {
 }
 
 // FormatEntryID formats a dense per-subject counter into the canonical
-// JournalEntry.ID. The bookkeeper agent calls it with
+// JournalEntry.ID. The PostJournal use case calls it with
 // LastSequence(subject)+1 right before publishing, which equals the
 // broker sequence the publish will receive on success (optimistic
 // concurrency guarantees the prediction). The function itself stays
@@ -48,7 +48,7 @@ func FormatEntryID(seq uint64) string {
 }
 
 // ExpectedSequence carries the optimistic-concurrency hint a producer
-// passes to agent.EventPublisher.Publish. Subject is the scope of
+// passes to usecase.EventPublisher.Publish. Subject is the scope of
 // mutual exclusion (typically one ledger; later we may introduce
 // per-period subjects if write contention emerges); LastSeq is the
 // producer's view of the last sequence already accepted on that Subject.

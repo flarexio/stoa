@@ -3,9 +3,11 @@
 The `accounting/` package is Stoa's bookkeeping conscience. It owns the
 ledger model and the validation rules that any AI-proposed journal entry
 must satisfy before it can be posted. The package is pure: no LLM SDK, no
-harness, no CLI imports. Bookkeeping orchestration lives in `accounting/agent/`,
-which proposes typed `accounting.JournalIntent` values and feeds validation
-errors back to the model for self-correction.
+harness, no CLI imports. The validate-and-publish operation lives in
+`accounting/usecase/` as the `PostJournal` use case, callable without an LLM.
+`accounting/agent/` drives `PostJournal` through the harness loop: it proposes
+typed `accounting.JournalIntent` values and feeds validation errors back to the
+model for self-correction.
 
 ## Flow
 
