@@ -24,13 +24,13 @@ const (
 type Command struct {
 	Kind    CommandKind               `json:"kind"`
 	Post    *accounting.JournalIntent `json:"post_journal,omitempty"`
-	Reverse *ReverseIntent            `json:"reverse_journal,omitempty"`
+	Reverse *ReverseCommand           `json:"reverse_journal,omitempty"`
 }
 
-// ReverseIntent is the payload of a reverse_journal Command: the ID of the
+// ReverseCommand is the payload of a reverse_journal Command: the ID of the
 // posted entry to reverse, plus an optional human reason recorded in the
 // reversing entry's description for the audit trail.
-type ReverseIntent struct {
+type ReverseCommand struct {
 	EntryID string `json:"entry_id"`
 	Reason  string `json:"reason,omitempty"`
 }

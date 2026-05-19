@@ -77,6 +77,11 @@ is one more route in `NewBookkeepingRegistry` and one more entry in
 `Commands()` (the prompt's command menu); a registry test asserts the two
 never drift.
 
+`post_journal` carries a `JournalIntent`, which is a journal-shaped draft
+of one entry. `reverse_journal` carries a `ReverseCommand`, which is an
+operation request that resolves to a new `JournalIntent` before the same
+domain validator runs.
+
 ## Posting and immutability
 
 A posted `JournalEntry` is immutable. `usecase.PostJournal` derives the
@@ -85,7 +90,9 @@ and stamps `PostedAt` via its clock before publishing the `JournalPosted`
 event; the `LedgerRepository.Apply` handler then writes the projection.
 The entry is never edited afterwards -- corrections are posted as new
 reversing entries (the `reverse_journal` command), never as in-place
-edits. This is a double-entry-bookkeeping invariant (SOX / GAAP / IFRS all
+edits. A reversal command is resolved into a mirror-image `JournalIntent`
+and then validated and executed through the same journal posting path.
+This is a double-entry-bookkeeping invariant (SOX / GAAP / IFRS all
 require the audit trail to be preserved verbatim), documented in full in
 the `accounting` package overview.
 

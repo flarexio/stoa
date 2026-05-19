@@ -246,7 +246,7 @@ func TestAgent_ReversesAPostedEntry(t *testing.T) {
 			Rationale: "reverse the entry the request names",
 			Intent: usecase.Command{
 				Kind:    usecase.CommandReverseJournal,
-				Reverse: &usecase.ReverseIntent{EntryID: postedID, Reason: "duplicate posting"},
+				Reverse: &usecase.ReverseCommand{EntryID: postedID, Reason: "duplicate posting"},
 			},
 		}, nil
 	})

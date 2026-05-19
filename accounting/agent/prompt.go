@@ -181,8 +181,8 @@ const (
 
 // commandsText renders the bookkeeping command menu from usecase.Commands(),
 // so the model's options stay in lockstep with the use cases the Registry
-// can route. Each command gets its purpose and the exact JSON "intent"
-// object that selects it.
+// can route. Each command gets its purpose and the exact JSON command body
+// that selects it.
 func commandsText() string {
 	var b strings.Builder
 	for _, c := range usecase.Commands() {
@@ -232,7 +232,7 @@ func (r PromptRenderer) branchesText() string {
 }
 
 const bookkeeperSystemPrompt = `You are a bookkeeping reasoning engine in a validated agent harness.
-Each turn you choose ONE command and return it as a typed intent:
+Each turn you choose ONE command and return it as a typed command:
 - post_journal: post a new journal entry. Include at least two lines; total debit must equal total credit; use only active account codes; reference an open period_id and a date inside it; use one currency throughout.
 - reverse_journal: reverse an existing posted entry. Supply the entry's JE-id and a short reason; the mirror-image entry is built and validated for you.
 Rules you must follow:

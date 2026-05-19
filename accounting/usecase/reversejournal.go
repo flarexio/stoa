@@ -29,10 +29,10 @@ type ReverseJournal struct {
 	Subject   string
 }
 
-// Validate reports whether intent names an existing entry and the
+// Validate reports whether command names an existing entry and the
 // resulting reversal satisfies every accounting invariant. It runs no
 // side effect.
-func (uc ReverseJournal) Validate(ctx context.Context, intent ReverseIntent) error {
+func (uc ReverseJournal) Validate(ctx context.Context, intent ReverseCommand) error {
 	reversal, err := uc.reversalIntent(ctx, intent)
 	if err != nil {
 		return err
@@ -40,10 +40,10 @@ func (uc ReverseJournal) Validate(ctx context.Context, intent ReverseIntent) err
 	return uc.post().Validate(ctx, reversal)
 }
 
-// Execute posts the reversing entry for an already-validated intent and
+// Execute posts the reversing entry for an already-validated command and
 // returns it. It does not re-validate -- a caller that has not validated
 // first must use Handle.
-func (uc ReverseJournal) Execute(ctx context.Context, intent ReverseIntent) (accounting.JournalEntry, error) {
+func (uc ReverseJournal) Execute(ctx context.Context, intent ReverseCommand) (accounting.JournalEntry, error) {
 	reversal, err := uc.reversalIntent(ctx, intent)
 	if err != nil {
 		return accounting.JournalEntry{}, err
@@ -51,9 +51,9 @@ func (uc ReverseJournal) Execute(ctx context.Context, intent ReverseIntent) (acc
 	return uc.post().Execute(ctx, reversal)
 }
 
-// Handle validates intent and, if it is clean, executes it -- the path a
+// Handle validates command and, if it is clean, executes it -- the path a
 // non-LLM caller uses to reverse an entry in a single call.
-func (uc ReverseJournal) Handle(ctx context.Context, intent ReverseIntent) (accounting.JournalEntry, error) {
+func (uc ReverseJournal) Handle(ctx context.Context, intent ReverseCommand) (accounting.JournalEntry, error) {
 	if err := uc.Validate(ctx, intent); err != nil {
 		return accounting.JournalEntry{}, err
 	}
@@ -75,8 +75,8 @@ func (uc ReverseJournal) post() PostJournal {
 
 // reversalIntent loads the target entry and builds the JournalIntent that
 // mirrors it: same period, date and currency, every line's side flipped,
-// and a description that records the reversal and the caller's reason.
-func (uc ReverseJournal) reversalIntent(ctx context.Context, intent ReverseIntent) (accounting.JournalIntent, error) {
+// and a description that records the reversal and the command's reason.
+func (uc ReverseJournal) reversalIntent(ctx context.Context, intent ReverseCommand) (accounting.JournalIntent, error) {
 	if uc.Repo == nil {
 		return accounting.JournalIntent{}, errors.New("usecase: reverse journal has no repository")
 	}

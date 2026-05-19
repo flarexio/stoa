@@ -41,7 +41,7 @@ func TestRegistry_RoutesReverseJournal(t *testing.T) {
 
 	original := postOne(t, repo, bus)
 
-	reverse := usecase.ReverseIntent{EntryID: original.ID, Reason: "wrong amount"}
+	reverse := usecase.ReverseCommand{EntryID: original.ID, Reason: "wrong amount"}
 	cmd := usecase.Command{Kind: usecase.CommandReverseJournal, Reverse: &reverse}
 
 	if err := reg.Validate(ctx, cmd); err != nil {

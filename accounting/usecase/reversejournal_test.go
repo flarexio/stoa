@@ -30,7 +30,7 @@ func TestReverseJournal_HandleReversesPostedEntry(t *testing.T) {
 	original := postOne(t, repo, bus)
 
 	uc := usecase.ReverseJournal{Repo: repo, Publisher: bus, Clock: fixedClock}
-	reversal, err := uc.Handle(ctx, usecase.ReverseIntent{EntryID: original.ID, Reason: "duplicate posting"})
+	reversal, err := uc.Handle(ctx, usecase.ReverseCommand{EntryID: original.ID, Reason: "duplicate posting"})
 	if err != nil {
 		t.Fatalf("handle: %v", err)
 	}
@@ -73,11 +73,11 @@ func TestReverseJournal_RejectsUnknownEntry(t *testing.T) {
 	repo, bus := seededLedger(t)
 
 	uc := usecase.ReverseJournal{Repo: repo, Publisher: bus, Clock: fixedClock}
-	if err := uc.Validate(ctx, usecase.ReverseIntent{EntryID: "JE-9999"}); err == nil {
+	if err := uc.Validate(ctx, usecase.ReverseCommand{EntryID: "JE-9999"}); err == nil {
 		t.Fatal("expected Validate to reject an unknown entry_id")
 	}
 
-	if _, err := uc.Handle(ctx, usecase.ReverseIntent{EntryID: "JE-9999"}); err == nil {
+	if _, err := uc.Handle(ctx, usecase.ReverseCommand{EntryID: "JE-9999"}); err == nil {
 		t.Fatal("expected Handle to reject an unknown entry_id")
 	}
 	if stored, _ := repo.Entries(ctx); len(stored) != 0 {
@@ -91,7 +91,7 @@ func TestReverseJournal_RejectsMissingEntryID(t *testing.T) {
 	repo, bus := seededLedger(t)
 
 	uc := usecase.ReverseJournal{Repo: repo, Publisher: bus, Clock: fixedClock}
-	if err := uc.Validate(context.Background(), usecase.ReverseIntent{}); err == nil {
+	if err := uc.Validate(context.Background(), usecase.ReverseCommand{}); err == nil {
 		t.Fatal("expected Validate to reject a missing entry_id")
 	}
 }
