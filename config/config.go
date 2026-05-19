@@ -18,19 +18,13 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// Filename is the fixed config file name the stoa CLI looks for inside
-// the work directory. Adapters and tooling that need to write or locate
-// the file should compose against this constant so the name stays
-// single-sourced.
+// Filename is the fixed config file name the stoa CLI looks for inside the
+// work directory.
 const Filename = "config.yaml"
 
 // DefaultDir returns the per-user work directory the stoa CLI uses when
-// --work-dir is not provided: ~/.flarex/stoa. The CLI reads config.yaml
-// from this directory today and may grow other per-user state
-// (credentials, cache, local sqlite, etc.) under the same root later,
-// which is why the name is "work" rather than "config". The directory
-// and the config.yaml inside it are both required at run time; callers
-// do not fall back to in-memory defaults when either is missing.
+// --work-dir is not provided: ~/.flarex/stoa. The directory and the config.yaml
+// inside it are both required at run time.
 func DefaultDir() (string, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -39,9 +33,8 @@ func DefaultDir() (string, error) {
 	return filepath.Join(home, ".flarex", "stoa"), nil
 }
 
-// PersistenceKind names a persistence backend the binary knows how to
-// wire. The empty string is treated as PersistenceMemory at validation
-// time so an absent persistence block degrades to in-memory.
+// PersistenceKind names a persistence backend. The empty string defaults to
+// PersistenceMemory at validation time.
 type PersistenceKind string
 
 const (
@@ -58,9 +51,8 @@ const (
 	MessagingNATS   MessagingKind = "nats"
 )
 
-// EngineKind names a reasoning engine the binary knows how to wire. The
-// empty string is treated as EngineScripted so an absent llm block
-// degrades to the offline engine.
+// EngineKind names a reasoning engine. The empty string defaults to
+// EngineScripted.
 type EngineKind string
 
 const (
@@ -94,14 +86,10 @@ type Messaging struct {
 	NATS NATS          `yaml:"nats"`
 }
 
-// NATS carries the connection + JetStream settings for messaging/nats.
-//
-// Subject is the concrete subject the producer publishes to and the
-// consumer filters on. StreamSubject is the subject pattern the
-// JetStream stream is bound to -- usually a wildcard such as
-// "accounting.>" so the stream captures the whole namespace and future
-// subjects need no stream reconfiguration. When StreamSubject is empty
-// it defaults to Subject, binding the stream to exactly that subject.
+// NATS carries the connection and JetStream settings for messaging/nats.
+// Subject is what the producer publishes to and the consumer filters on;
+// StreamSubject is the pattern the stream binds to (usually a wildcard like
+// "accounting.>") and defaults to Subject when empty.
 type NATS struct {
 	URL           string `yaml:"url"`
 	Stream        string `yaml:"stream"`

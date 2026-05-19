@@ -148,15 +148,12 @@ type tuiComposer struct {
 	maxTurns   int
 }
 
-// bookOption builds a selectable bookkeeper session for an accounting
-// scenario. The repository, bus, and engine are composed lazily inside
-// Start, when the user actually picks the option.
+// bookOption builds a selectable bookkeeper session for an accounting scenario.
+// The repository, bus, and engine are composed lazily inside Start.
 //
-// The TUI is a live front-end: it connects to a ledger that has already
-// been seeded out of band by `stoa seed`, and never seeds on startup.
-// The accounts, branches, and periods in the scenario file are not
-// applied here -- the repository is the source of truth. An empty
-// repository (no open period below) means the seed step was skipped.
+// The TUI is a live front-end: it connects to a ledger already seeded out of
+// band by `stoa seed` and never seeds on startup. An empty repository (no open
+// period below) means the seed step was skipped.
 func (comp tuiComposer) bookOption(path string, scenario accounting.Scenario) tui.Option {
 	return tui.Option{
 		Label: "bookkeeper · " + scenarioLabel(scenario.Name, path),

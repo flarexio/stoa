@@ -9,8 +9,6 @@ import (
 )
 
 // PromptRenderer builds provider-neutral messages for an NPC reasoning turn.
-// Wire it into the llm/openai adapter via openai.Config.Renderer so the NPC
-// use case never imports provider-specific packages.
 type PromptRenderer struct {
 	World   world.WorldState
 	ActorID string

@@ -3,6 +3,7 @@ package world
 import (
 	"context"
 	"fmt"
+	"slices"
 )
 
 // Validator enforces hard game rules for an NPCIntent before execution.
@@ -21,18 +22,15 @@ func (v Validator) Validate(_ context.Context, intent NPCIntent) error {
 
 	action := intent.Action
 
-	// Action type must be allowed for the actor's role.
 	allowed, hasRole := roleAllowedActions[actor.Role]
 	if !hasRole || !allowed[action.Type] {
 		return fmt.Errorf("world: action %q is not allowed for role %q", action.Type, actor.Role)
 	}
 
-	// Speak/offer/refuse require non-empty dialogue.
 	if dialogueActions[action.Type] && intent.Say == "" {
 		return fmt.Errorf("world: action %q requires non-empty dialogue", action.Type)
 	}
 
-	// Interaction actions require a target in the same location.
 	if interactionActions[action.Type] {
 		if action.TargetID == "" {
 			return fmt.Errorf("world: action %q requires a target", action.Type)
@@ -46,7 +44,6 @@ func (v Validator) Validate(_ context.Context, intent NPCIntent) error {
 		}
 	}
 
-	// Give/trade require the actor to own the item.
 	if itemActions[action.Type] {
 		if action.ItemID == "" {
 			return fmt.Errorf("world: action %q requires an item", action.Type)
@@ -59,7 +56,6 @@ func (v Validator) Validate(_ context.Context, intent NPCIntent) error {
 		}
 	}
 
-	// Move requires an existing, reachable destination.
 	if action.Type == ActionMove {
 		if action.LocationID == "" {
 			return fmt.Errorf("world: action %q requires a destination location", action.Type)
@@ -80,19 +76,9 @@ func (v Validator) Validate(_ context.Context, intent NPCIntent) error {
 }
 
 func actorOwns(actor Actor, itemID string) bool {
-	for _, id := range actor.Inventory {
-		if id == itemID {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(actor.Inventory, itemID)
 }
 
 func isConnected(loc Location, targetID string) bool {
-	for _, id := range loc.Connections {
-		if id == targetID {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(loc.Connections, targetID)
 }

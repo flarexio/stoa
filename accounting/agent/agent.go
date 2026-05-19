@@ -1,11 +1,8 @@
-// Package agent runs the bookkeeping agent. It wires the accounting use
-// cases through the harness loop: the LLM proposes a typed intent, the
-// use-case Registry validates and executes it, and the registry routes the
-// intent to the matching bookkeeping operation. post_journal posts a new
-// entry; reverse_journal reverses an existing one.
-// Both reach the ledger by publishing a JournalPosted event through an
-// EventPublisher, never by writing the repository directly, so the publish
-// path stays the single authoritative place a posted entry comes into being.
+// Package agent runs the bookkeeping agent: it wires the accounting use cases
+// through the harness loop, where the LLM proposes a typed intent and the
+// bookkeeping Registry validates, routes, and executes it. Both use cases reach
+// the ledger by publishing a JournalPosted through an EventPublisher, never by
+// writing the repository directly.
 package agent
 
 import (
@@ -20,10 +17,8 @@ import (
 )
 
 // Bookkeeper runs one bookkeeping decision: a natural-language request is
-// turned into a typed intent, routed by the use-case Registry to the
-// matching use case, validated, and executed. Producers never call
-// repo.Apply; that is the consumer's job and runs inside the EventHandler
-// subscribed to the publisher.
+// turned into a typed intent, routed by the Registry to the matching use case,
+// validated, and executed.
 type Bookkeeper struct {
 	Engine    llm.ReasoningEngine[bookkeeping.Intent]
 	Repo      accounting.LedgerRepository
@@ -43,9 +38,8 @@ type Result struct {
 	Events      []llm.CycleEvent
 }
 
-// Book runs the reason -> validate -> execute loop for the given
-// bookkeeping request, routing whichever intent the model proposes
-// through the use-case Registry.
+// Book runs the reason -> validate -> execute loop for request, routing
+// whichever intent the model proposes through the Registry.
 func (a Bookkeeper) Book(ctx context.Context, request string) (Result, error) {
 	if a.Engine == nil {
 		return Result{}, errors.New("bookkeeper: agent has no reasoning engine")
@@ -59,10 +53,8 @@ func (a Bookkeeper) Book(ctx context.Context, request string) (Result, error) {
 
 	registry := bookkeeping.NewBookkeepingRegistry(a.Repo, a.Publisher, a.Clock, a.Subject)
 
-	// The registry owns validate + execute for every intent. The agent
-	// only adapts the posted entry into the llm.Observation the harness
-	// loop feeds back to the model; a non-LLM caller drives a use case's
-	// Handle directly instead.
+	// The registry owns validate + execute; the agent only adapts the posted
+	// entry into the llm.Observation the harness loop feeds back to the model.
 	var posted accounting.JournalEntry
 	executor := loop.ExecutorFunc[bookkeeping.Intent](func(ctx context.Context, intent bookkeeping.Intent) (llm.Observation, error) {
 		entry, err := registry.Execute(ctx, intent)

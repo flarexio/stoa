@@ -15,19 +15,15 @@ import (
 	"github.com/flarexio/stoa/persistence/postgres/pgstore"
 )
 
-// accountingRepository implements accounting.LedgerRepository against
-// Postgres. The name carries the domain so a future second domain
-// (e.g. inventory) can add an inventoryRepository in the same package
-// without colliding.
+// accountingRepository implements accounting.LedgerRepository against Postgres.
 type accountingRepository struct {
 	pool *pgxpool.Pool
 	q    *pgstore.Queries
 }
 
 // NewAccountingRepository opens a pgxpool.Pool from dsn and returns the
-// accounting.LedgerRepository it backs alongside an io.Closer the
-// caller defers to release the pool. The concrete repository type
-// stays hidden so cmd-time wiring depends only on the abstraction.
+// accounting.LedgerRepository it backs, plus an io.Closer the caller defers to
+// release the pool.
 func NewAccountingRepository(ctx context.Context, dsn string) (accounting.LedgerRepository, io.Closer, error) {
 	pool, closer, err := connectPool(ctx, dsn)
 	if err != nil {
@@ -129,10 +125,8 @@ func (r *accountingRepository) Branches(ctx context.Context) ([]accounting.Branc
 	return out, nil
 }
 
-// Entries returns every posted entry sorted by sequence, each with its
-// lines populated. The implementation does one query per table -- one
-// for entries, one for lines spanning every entry id -- then stitches
-// them in memory so the projection is exposed by value.
+// Entries returns every posted entry sorted by sequence, each with its lines
+// populated -- one query for entries, one for all their lines, stitched in memory.
 func (r *accountingRepository) Entries(ctx context.Context) ([]accounting.JournalEntry, error) {
 	rows, err := r.q.ListEntries(ctx)
 	if err != nil {
@@ -201,9 +195,9 @@ func (r *accountingRepository) PutBranch(ctx context.Context, b accounting.Branc
 	return nil
 }
 
-// Apply writes the entry, its lines, and the new last-sequence record
-// inside one transaction so a concurrent LastSequence reader cannot see
-// the entry without also seeing the new sequence.
+// Apply writes the entry, its lines, and the new last-sequence record in one
+// transaction, so a concurrent LastSequence reader cannot see the entry without
+// also seeing the new sequence.
 func (r *accountingRepository) Apply(ctx context.Context, evt accounting.JournalPosted) error {
 	tx, err := r.pool.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {

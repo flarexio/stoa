@@ -10,14 +10,10 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// Scenario is the on-disk shape of an accounting fixture. It carries the
-// company, chart of accounts, branches, and periods that seed a
-// LedgerRepository before the bookkeeper agent starts posting entries.
-//
-// Scenario intentionally does not carry journal entries: those arrive
-// through the event stream as JournalPosted, never as static fixture
-// data, so the projection is always built from the same code path in
-// tests and in production.
+// Scenario is the on-disk shape of an accounting fixture: the company, chart of
+// accounts, branches, and periods that seed a LedgerRepository before the agent
+// starts posting. It carries no journal entries -- those arrive only through
+// the event stream as JournalPosted.
 type Scenario struct {
 	Name        string    `json:"name,omitempty" yaml:"name,omitempty"`
 	Description string    `json:"description,omitempty" yaml:"description,omitempty"`
@@ -48,9 +44,8 @@ func DecodeScenario(r io.Reader) (Scenario, error) {
 	return s, nil
 }
 
-// LoadScenarioYAML reads and decodes a YAML seed file from disk. It is the
-// loader for the declarative `stoa seed` step; LoadScenarioFile stays the
-// JSON loader used by test fixtures.
+// LoadScenarioYAML reads and decodes a YAML seed file from disk -- the loader
+// for the declarative `stoa seed` step.
 func LoadScenarioYAML(path string) (Scenario, error) {
 	f, err := os.Open(path)
 	if err != nil {

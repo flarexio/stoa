@@ -45,7 +45,7 @@ Dependencies point inward. Runtime calls can cross outward through interfaces, b
 
 ## Feature Slice Layout
 
-Each feature is a domain package at the feature root with nested subpackages for the layers that operate on it: an `agent/` subpackage for the LLM-driven loop and, when the feature has application operations worth running without an LLM, a `usecase/` subpackage between them. The split keeps domain types independently importable so other agents, handoff receivers, or offline batch validators can consume them without pulling any LLM code, and keeps each use case callable by a REST handler or a batch job, not only by the agent.
+Each feature is a domain package at the feature root with nested subpackages for the layers that operate on it: an `agent/` subpackage for the LLM-driven loop and, when the feature has application operations worth running without an LLM, a use-case subpackage between them, named for the operations it holds (e.g. `accounting/bookkeeping/`). The split keeps domain types independently importable so other agents, handoff receivers, or offline batch validators can consume them without pulling any LLM code, and keeps each use case callable by a REST handler or a batch job, not only by the agent.
 
 ```text
 stoa/
@@ -54,12 +54,12 @@ stoa/
     <port>.go           # Domain port interface(s); ports are stdlib-only
     event.go            # Typed domain events when the feature is event-driven
     <domain>_test.go
-    usecase/            # Application operations on <domain>; no LLM dependency
+    <usecase>/          # Application operations on <domain> (e.g. bookkeeping/); no LLM dependency
       <usecase>.go      # A validate + execute operation callable without an LLM
       eventbus.go       # Transport ports (EventPublisher/Subscriber/Bus) when event-driven
       <usecase>_test.go
     agent/              # The LLM-driven loop that drives the use cases
-      agent.go          # Orchestration (imports <domain>, <domain>/usecase, llm, harness/loop)
+      agent.go          # Orchestration (imports <domain>, <domain>/<usecase>, llm, harness/loop)
       prompt.go         # Feature-specific provider-neutral PromptRenderer
       agent_test.go
       integration_test.go
@@ -79,7 +79,6 @@ stoa/
       accounting.go     #   NewAccountingBus factory + domain codec
   harness/
     loop/               # Typed reason-validate-execute runner
-    validator/          # Shared validation helpers and LLM feedback formatting
     retry/              # (reserved) retry and circuit-breaker mechanics
     handoff/            # (reserved) shared handoff envelopes
   llm/                  # Reasoning engine and message contracts

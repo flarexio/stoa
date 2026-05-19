@@ -1,10 +1,9 @@
-// Package world is the game-domain package for Stoa's NPC harness.
-// It defines typed world state, actors, items, locations, and the NPCIntent
-// that flows through the reason→validate→execute loop. This package has no
-// dependency on LLM SDKs, the harness, or any provider-specific code.
+// Package world is the game-domain package for Stoa's NPC harness. It defines
+// typed world state, actors, items, locations, and the NPCIntent that flows
+// through the reason->validate->execute loop. It depends on no LLM SDK, the
+// harness, or any provider-specific code.
 package world
 
-// ActorRole describes the role an actor plays in the world.
 type ActorRole string
 
 const (
@@ -14,7 +13,6 @@ const (
 	RoleBandit   ActorRole = "bandit"
 )
 
-// ActionType names the kind of action an NPC proposes.
 type ActionType string
 
 const (
@@ -60,7 +58,6 @@ var roleAllowedActions = map[ActorRole]map[ActionType]bool{
 	},
 }
 
-// Personality holds personality traits for an actor.
 type Personality struct {
 	Cautious bool `json:"cautious"`
 	Friendly bool `json:"friendly"`
@@ -71,14 +68,12 @@ type Relationship struct {
 	Reputation int `json:"reputation"` // -100 to 100
 }
 
-// Location is a place in the game world.
 type Location struct {
 	ID          string   `json:"id"`
 	Name        string   `json:"name"`
 	Connections []string `json:"connections"` // IDs of reachable locations
 }
 
-// Actor is a character (NPC or player) in the game world.
 type Actor struct {
 	ID          string      `json:"id"`
 	Name        string      `json:"name"`
@@ -88,7 +83,6 @@ type Actor struct {
 	Personality Personality `json:"personality"`
 }
 
-// Item is an object in the game world.
 type Item struct {
 	ID    string `json:"id"`
 	Name  string `json:"name"`
@@ -116,8 +110,8 @@ type Action struct {
 	LocationID string     `json:"location_id,omitempty"`
 }
 
-// NPCIntent is the typed output of an NPC reasoning step. It carries the
-// dialogue, emotional state, and proposed action for one turn.
+// NPCIntent is the typed output of an NPC reasoning step: dialogue, emotional
+// state, and the proposed action for one turn.
 type NPCIntent struct {
 	Say     string `json:"say"`
 	Emotion string `json:"emotion"`

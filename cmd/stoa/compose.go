@@ -1,12 +1,8 @@
 package main
 
-// compose.go holds the UI-agnostic composition helpers that wire the
-// stoa binary's outbound adapters from a config.Config: repository,
-// messaging bus, and reasoning engine. The book-run / npc-run commands
-// call these directly, and a future in-process TUI command does the
-// same -- the wiring lives here, in package main, rather than in a
-// separate importable package, because every front-end ships in this
-// one binary.
+// compose.go holds the UI-agnostic composition helpers that wire the stoa
+// binary's outbound adapters from a config.Config: repository, messaging bus,
+// and reasoning engine.
 
 import (
 	"context"
@@ -28,11 +24,9 @@ import (
 	pgrepo "github.com/flarexio/stoa/persistence/postgres"
 )
 
-// loadBookConfig reads config.yaml from the given work directory. When
-// dir is empty it falls back to config.DefaultDir() (~/.flarex/stoa).
-// The file is required: a missing or unreadable config.yaml surfaces as
-// an error rather than silently degrading to in-process defaults, so a
-// misplaced config never gets papered over.
+// loadBookConfig reads config.yaml from dir, falling back to
+// config.DefaultDir() (~/.flarex/stoa) when dir is empty. The file is required:
+// a missing config.yaml is an error, never an implicit in-process fallback.
 func loadBookConfig(dir string) (*config.Config, error) {
 	if dir == "" {
 		def, err := config.DefaultDir()
@@ -44,9 +38,9 @@ func loadBookConfig(dir string) (*config.Config, error) {
 	return config.Load(filepath.Join(dir, config.Filename))
 }
 
-// buildRepository materialises the accounting.LedgerRepository chosen
-// by cfg. The returned io.Closer is always safe to call; the memory
-// backend supplies a no-op closer so callers do not have to branch.
+// buildRepository materialises the accounting.LedgerRepository chosen by cfg.
+// The returned io.Closer is always safe to call -- the memory backend supplies
+// a no-op closer.
 func buildRepository(ctx context.Context, cfg config.Persistence) (accounting.LedgerRepository, io.Closer, error) {
 	switch cfg.Kind {
 	case config.PersistenceMemory:
@@ -102,8 +96,7 @@ func openBus(ctx context.Context, cfg config.Messaging) (bookkeeping.EventBus, e
 	}
 }
 
-// noopCloser satisfies io.Closer for adapters that own no external
-// resources (the in-memory repository).
+// noopCloser satisfies io.Closer for adapters that own no external resources.
 type noopCloser struct{}
 
 func (noopCloser) Close() error { return nil }
@@ -148,9 +141,8 @@ func buildBookEngine(ctx context.Context, kind string, scenario accounting.Scena
 	}
 }
 
-// extractFeedback collects the validation- and execution-error content
-// from a slice of cycle events, for the "feedback" field of the CLI's
-// JSON report.
+// extractFeedback collects validation- and execution-error content from events
+// for the "feedback" field of the CLI's JSON report.
 func extractFeedback(events []llm.CycleEvent) []string {
 	var feedback []string
 	for _, e := range events {

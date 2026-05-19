@@ -11,14 +11,10 @@ import (
 	"github.com/flarexio/stoa/llm"
 )
 
-// PromptRenderer builds provider-neutral messages for a bookkeeping
-// reasoning turn. It carries snapshots of the company, chart of accounts,
-// periods, and branches so Render itself is synchronous and free of
-// repository I/O on the hot path. If the chart of accounts changes
-// mid-session, construct a new renderer with NewPromptRenderer.
-//
-// Wire it into the llm/openai adapter via openai.Config.Renderer so the
-// bookkeeping use case never imports a provider SDK.
+// PromptRenderer builds provider-neutral messages for a bookkeeping reasoning
+// turn. It holds snapshots of the company, chart of accounts, periods, and
+// branches so Render is synchronous and free of repository I/O on the hot path;
+// construct a new renderer with NewPromptRenderer if the chart changes.
 type PromptRenderer struct {
 	Company  accounting.Company
 	Accounts []accounting.Account
@@ -26,9 +22,8 @@ type PromptRenderer struct {
 	Branches []accounting.Branch
 }
 
-// NewPromptRenderer reads the chart of accounts, periods, and branches
-// from repo once and returns a renderer ready to plug into an LLM
-// adapter.
+// NewPromptRenderer reads the chart of accounts, periods, and branches from
+// repo once and returns a renderer ready to plug into an LLM adapter.
 func NewPromptRenderer(ctx context.Context, company accounting.Company, repo accounting.LedgerRepository) (PromptRenderer, error) {
 	if repo == nil {
 		return PromptRenderer{}, fmt.Errorf("bookkeeper: NewPromptRenderer needs a repository")
@@ -71,10 +66,9 @@ func (r PromptRenderer) Render(input llm.ReasoningInput) ([]llm.Message, error) 
 	return messages, nil
 }
 
-// accountDumpThreshold is the active-account count at or below which the
-// renderer lists the whole chart in the prompt. Above it, the chart is
-// summarized and the model uses the find_accounts tool to look up codes,
-// so a large chart never bloats every turn's prompt.
+// accountDumpThreshold is the active-account count at or below which the whole
+// chart is listed in the prompt; above it the chart is summarized and the model
+// looks up codes through the find_accounts tool.
 const accountDumpThreshold = 12
 
 func (r PromptRenderer) buildUserPrompt(input llm.ReasoningInput) string {
@@ -136,8 +130,8 @@ func (r PromptRenderer) buildUserPrompt(input llm.ReasoningInput) string {
 	return b.String()
 }
 
-// chartSummary describes the chart of accounts by type and count instead of
-// listing every account -- the tool-mode alternative to activeAccounts.
+// chartSummary describes the chart of accounts by type and count -- the
+// tool-mode alternative to activeAccounts.
 func (r PromptRenderer) chartSummary() string {
 	byType := map[accounting.AccountType]int{}
 	total := 0
@@ -179,10 +173,8 @@ const (
 	intentEnvelopeShape = `{"evidence":[{"source":"...","fact":"..."}],"rationale":"...","intent":<one command intent object from the list above>}`
 )
 
-// intentsText renders the bookkeeping intent menu from bookkeeping.Intents(),
-// so the model's options stay in lockstep with the use cases the Registry
-// can route. Each intent gets its purpose and the exact JSON body that
-// selects it.
+// intentsText renders the bookkeeping intent menu from bookkeeping.Intents() so
+// the model's options stay in lockstep with the use cases the Registry routes.
 func intentsText() string {
 	var b strings.Builder
 	for _, c := range bookkeeping.Intents() {

@@ -9,12 +9,11 @@ import (
 	"github.com/flarexio/stoa/world"
 )
 
-// scriptedEngine is a deterministic, offline llm.ReasoningEngine used by the
-// demo CLI. It first proposes an intent that the world.Validator will reject
-// (giving an item the actor does not own), then — once validation feedback
-// appears in the cycle events — proposes a valid intent derived from the
-// scenario. This proves the reason → validate → execute → feedback loop end
-// to end without needing an LLM provider.
+// scriptedEngine is a deterministic, offline llm.ReasoningEngine for the demo
+// CLI. It first proposes an intent world.Validator rejects (giving an item the
+// actor does not own), then -- once validation feedback appears -- proposes a
+// valid intent, exercising the reason -> validate -> execute -> feedback loop
+// without an LLM provider.
 type scriptedEngine struct {
 	world   world.WorldState
 	actorID string
