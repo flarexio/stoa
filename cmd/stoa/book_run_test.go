@@ -87,9 +87,13 @@ func TestRunBook_AWSBillSelfCorrects(t *testing.T) {
 	if rep.Entry.PeriodID != "2026-05" {
 		t.Errorf("expected entry posted to open period 2026-05, got %q", rep.Entry.PeriodID)
 	}
-	if rep.Intent.Lines[0].Amount != rep.Intent.Lines[1].Amount {
+	post := rep.Command.Post
+	if post == nil {
+		t.Fatalf("expected a post_journal command, got kind %q", rep.Command.Kind)
+	}
+	if post.Lines[0].Amount != post.Lines[1].Amount {
 		t.Errorf("final intent should be balanced, got %d vs %d",
-			rep.Intent.Lines[0].Amount, rep.Intent.Lines[1].Amount)
+			post.Lines[0].Amount, post.Lines[1].Amount)
 	}
 	if len(rep.Feedback) == 0 {
 		t.Errorf("expected at least one validation feedback entry, got none")
@@ -328,10 +332,14 @@ func TestRunBook_CustomAmount(t *testing.T) {
 	if err := json.Unmarshal(stdout.Bytes(), &rep); err != nil {
 		t.Fatalf("output is not valid JSON: %v", err)
 	}
-	if rep.Intent.Lines[0].Amount != 50000 {
-		t.Errorf("debit amount: want 50000, got %d", rep.Intent.Lines[0].Amount)
+	post := rep.Command.Post
+	if post == nil {
+		t.Fatalf("expected a post_journal command, got kind %q", rep.Command.Kind)
 	}
-	if rep.Intent.Lines[1].Amount != 50000 {
-		t.Errorf("credit amount: want 50000, got %d", rep.Intent.Lines[1].Amount)
+	if post.Lines[0].Amount != 50000 {
+		t.Errorf("debit amount: want 50000, got %d", post.Lines[0].Amount)
+	}
+	if post.Lines[1].Amount != 50000 {
+		t.Errorf("credit amount: want 50000, got %d", post.Lines[1].Amount)
 	}
 }

@@ -137,17 +137,17 @@ go run ./cmd/stoa npc-run testdata/scenarios/tavern.json --actor mira
 
 ## 範例：記帳代理
 
-會計切片把相同架構套用到複式記帳。一個自然語言請求被轉換成經驗證的分錄——代理提出具型別的 `JournalIntent`，會計領域驗證它，只有平衡、期間正確、科目有效的分錄才會被過帳到帳本。
+會計切片把相同架構套用到複式記帳。一個自然語言請求被轉換成具型別的 `usecase.Command`——模型選 `post_journal` 記一筆新分錄，或選 `reverse_journal` 沖銷一筆——再由 use-case registry 路由。只有平衡、期間正確、科目有效的分錄才會被過帳到帳本。
 
 ```text
 記帳請求
-→ LLM 提出 JournalIntent（科目、金額、期間）
-→ accounting.Validator 執行會計不變條件
+→ LLM 提出一個 usecase.Command（post_journal 或 reverse_journal）
+→ use-case registry 路由它；accounting.Validator 執行會計不變條件
 → 通過驗證的分錄以 JournalPosted 事件發布，並投影到帳本
 → 驗證錯誤以具型別事件回饋以供自我修正
 ```
 
-`accounting/` 擁有領域模型——科目表、會計期間、分錄和驗證規則——不依賴任何 LLM。`accounting/usecase/` 擁有 `PostJournal` 操作（先驗證再發布，不需 LLM 即可呼叫）與事件傳輸 port。`accounting/agent/` 擁有代理迴圈和功能專屬的提示詞渲染器。
+`accounting/` 擁有領域模型——科目表、會計期間、分錄和驗證規則——不依賴任何 LLM。`accounting/usecase/` 擁有 `PostJournal` 與 `ReverseJournal` 操作（先驗證再執行，不需 LLM 即可呼叫）、路由它們的 `Command` union 與 registry、以及事件傳輸 port。`accounting/agent/` 擁有代理迴圈和功能專屬的提示詞渲染器。
 
 `cmd/stoa book-run` 可從命令列跑這個迴圈；可執行的範例與設定方式見 [`docs/accounting.md`](docs/accounting.md)。
 
@@ -179,7 +179,7 @@ stoa/
 ├── world/                 # 遊戲領域：世界狀態、角色、物品、NPCIntent、驗證器
 │   └── agent/             # NPC 代理迴圈與提示詞渲染
 ├── accounting/            # 會計領域：帳本、科目、期間、驗證器、事件
-│   ├── usecase/           # PostJournal 操作 + 事件傳輸 port（不依賴 LLM）
+│   ├── usecase/           # PostJournal/ReverseJournal use case、command registry、事件 port
 │   └── agent/             # 記帳代理迴圈與提示詞渲染
 ├── persistence/           # LedgerRepository 轉接器（memory、postgres）
 ├── messaging/             # EventBus 轉接器（inproc、nats）

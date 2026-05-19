@@ -3,17 +3,19 @@
 The `accounting/` package is Stoa's bookkeeping conscience. It owns the
 ledger model and the validation rules that any AI-proposed journal entry
 must satisfy before it can be posted. The package is pure: no LLM SDK, no
-harness, no CLI imports. The validate-and-publish operation lives in
-`accounting/usecase/` as the `PostJournal` use case, callable without an LLM.
-`accounting/agent/` drives `PostJournal` through the harness loop: it proposes
-typed `accounting.JournalIntent` values and feeds validation errors back to the
-model for self-correction.
+harness, no CLI imports. The application operations live in
+`accounting/usecase/`, each callable without an LLM: `PostJournal` posts a
+new entry and `ReverseJournal` reverses an existing one. `accounting/agent/`
+drives them through the harness loop -- it proposes a typed `usecase.Command`
+and feeds validation errors back to the model for self-correction.
 
 ## Flow
 
 ```text
 bookkeeping request
-  -> agent.Bookkeeper asks the LLM to propose a JournalIntent
+  -> agent.Bookkeeper asks the LLM to propose a usecase.Command
+     (post_journal or reverse_journal)
+  -> the usecase.Registry routes the command to its use case
   -> accounting.Validator enforces the accounting invariants
   -> the validated entry is published as a JournalPosted event
   -> a subscribed handler applies the event to the LedgerRepository projection
@@ -55,17 +57,37 @@ depends on floating-point comparison.
 `Validator.Validate` joins every violation with `errors.Join` so a single
 correction cycle can address all problems at once.
 
+## Use cases and commands
+
+`accounting/usecase/` holds the application operations. Each is a plain
+Go type with `Validate` / `Execute` / `Handle` methods and no LLM
+dependency, so a REST handler, a batch job, or a test drives one as
+directly as the agent does:
+
+| Use case        | Command          | What it does                                              |
+| --------------- | ---------------- | --------------------------------------------------------- |
+| `PostJournal`   | `post_journal`   | Posts a new balanced double-entry journal entry.          |
+| `ReverseJournal`| `reverse_journal`| Reverses a posted entry with a mirror-image entry.        |
+
+`usecase.Command` is the discriminated union the agent's model emits: a
+`kind` plus the payload that kind selects. `usecase.Registry` is dumb
+dispatch -- it maps a `kind` to its use case's validate / execute pair, so
+one agent and one harness loop route to every use case. Adding a use case
+is one more route in `NewBookkeepingRegistry` and one more entry in
+`Commands()` (the prompt's command menu); a registry test asserts the two
+never drift.
+
 ## Posting and immutability
 
-A posted `JournalEntry` is immutable. `agent.Bookkeeper` derives the entry
-ID from the broker sequence (`accounting.FormatEntryID(lastSeq+1)`) and
-stamps `PostedAt` via its clock before publishing the `JournalPosted`
+A posted `JournalEntry` is immutable. `usecase.PostJournal` derives the
+entry ID from the broker sequence (`accounting.FormatEntryID(lastSeq+1)`)
+and stamps `PostedAt` via its clock before publishing the `JournalPosted`
 event; the `LedgerRepository.Apply` handler then writes the projection.
 The entry is never edited afterwards -- corrections are posted as new
-reversing entries, never as in-place edits. This is a
-double-entry-bookkeeping invariant (SOX / GAAP / IFRS all require the
-audit trail to be preserved verbatim), documented in full in the
-`accounting` package overview.
+reversing entries (the `reverse_journal` command), never as in-place
+edits. This is a double-entry-bookkeeping invariant (SOX / GAAP / IFRS all
+require the audit trail to be preserved verbatim), documented in full in
+the `accounting` package overview.
 
 Repository reads (`Entries`, `Entry`) return entries by value, and the
 in-memory implementation deep-copies the lines slice, so callers cannot

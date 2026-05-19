@@ -111,7 +111,7 @@ func (noopCloser) Close() error { return nil }
 // buildBookEngine selects the reasoning engine the CLI feeds to the
 // bookkeeper agent. The scripted engine is offline and deterministic; the
 // openai engine drives a real LLM through the same harness loop.
-func buildBookEngine(ctx context.Context, kind string, scenario accounting.Scenario, repo accounting.LedgerRepository, amount int64, currency, model string) (llm.ReasoningEngine[accounting.JournalIntent], error) {
+func buildBookEngine(ctx context.Context, kind string, scenario accounting.Scenario, repo accounting.LedgerRepository, amount int64, currency, model string) (llm.ReasoningEngine[usecase.Command], error) {
 	switch kind {
 	case "", "scripted":
 		expense, err := firstActiveAccount(ctx, repo, accounting.AccountExpense)
@@ -134,7 +134,7 @@ func buildBookEngine(ctx context.Context, kind string, scenario accounting.Scena
 		if err != nil {
 			return nil, fmt.Errorf("book-run: openai engine: %w", err)
 		}
-		adapter, err := openai.NewAdapter(openai.Config[accounting.JournalIntent]{
+		adapter, err := openai.NewAdapter(openai.Config[usecase.Command]{
 			Model:        model,
 			OutputFormat: openai.OutputFormatJSONObject,
 			Renderer:     renderer,
