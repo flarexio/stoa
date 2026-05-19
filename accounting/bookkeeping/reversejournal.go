@@ -60,10 +60,8 @@ func (uc ReverseJournal) Handle(ctx context.Context, intent ReverseIntent) (acco
 	return uc.Execute(ctx, intent)
 }
 
-// post returns the PostJournal use case ReverseJournal delegates to: a
-// reversal is just another journal entry, so it reaches the ledger through
-// the same validated publish path, with the same optimistic-concurrency
-// and entry-ID handling.
+// post returns a PostJournal wired against the same repo, publisher, and
+// clock so a reversal reaches the ledger through the same publish path.
 func (uc ReverseJournal) post() PostJournal {
 	return PostJournal{
 		Repo:      uc.Repo,
@@ -112,10 +110,6 @@ func (uc ReverseJournal) reversalIntent(ctx context.Context, intent ReverseInten
 	}, nil
 }
 
-// flipSide swaps a debit for a credit and vice versa -- the whole of what
-// makes one entry reverse another. An unrecognised side is returned
-// unchanged so the domain validator reports it rather than this helper
-// silently masking it.
 func flipSide(side accounting.LineSide) accounting.LineSide {
 	switch side {
 	case accounting.SideDebit:

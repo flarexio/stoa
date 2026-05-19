@@ -52,8 +52,7 @@ const (
 	reverseJournalArgsShape = `{"entry_id":"<JE-id of the posted entry to reverse>","reason":"..."}`
 )
 
-// Intents returns the descriptor for every intent kind, ordered by Kind.
-// It is the single source of the agent's vocabulary: the prompt renders
+// Intents is the single source of the agent's vocabulary: the prompt renders
 // this list and NewBookkeepingRegistry routes exactly these kinds, a
 // correspondence a registry test enforces.
 func Intents() []IntentDescriptor {

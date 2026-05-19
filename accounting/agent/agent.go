@@ -34,7 +34,6 @@ type Bookkeeper struct {
 	Sink      loop.EventSink
 }
 
-// Result is the outcome of one bookkeeping cycle.
 type Result struct {
 	Intent      bookkeeping.Intent
 	Entry       accounting.JournalEntry

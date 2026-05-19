@@ -21,7 +21,6 @@ type NPC struct {
 	Sink     loop.EventSink
 }
 
-// Result holds the outcome of one NPC reasoning turn.
 type Result struct {
 	Intent      world.NPCIntent
 	Observation llm.Observation

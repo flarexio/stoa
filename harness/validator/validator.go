@@ -7,9 +7,7 @@ import (
 	"strings"
 )
 
-// Intent is the interface that all structured intents from LLM must satisfy.
 type Intent interface {
-	// Validate performs domain-specific validation.
 	Validate(ctx context.Context) error
 }
 

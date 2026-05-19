@@ -133,7 +133,7 @@ go run ./cmd/stoa book-run testdata/accounting/aws_bill.json \
 OPENAI_API_KEY=sk-... go run ./cmd/stoa book-run \
   testdata/accounting/aws_bill.json \
   --engine openai \
-  --model gpt-4.1-mini \
+  --model gpt-5.4-mini \
   --request "Paid AWS bill 100 USD using company credit card on 12 May 2026"
 ```
 

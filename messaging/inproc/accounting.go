@@ -30,8 +30,8 @@ type accountingBus struct {
 	handlers  []bookkeeping.EventHandler
 }
 
-// NewAccountingBus returns an empty in-process bookkeeping.EventBus for
-// JournalPosted events.
+// NewAccountingBus returns an empty in-process EventBus for JournalPosted
+// events.
 func NewAccountingBus() bookkeeping.EventBus {
 	return &accountingBus{lastSubj: make(map[string]uint64)}
 }

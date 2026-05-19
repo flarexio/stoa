@@ -26,12 +26,10 @@ type AccountLister interface {
 	Accounts(ctx context.Context) ([]Account, error)
 }
 
-// FindAccounts returns the accounts in repo's chart that match filter,
-// ordered by code. It is a read-only query and never mutates the
-// repository.
-//
-// It exists so an agent can look up the codes it needs instead of being
-// handed the whole chart of accounts in its prompt; the bookkeeping tool
+// FindAccounts queries the chart of accounts matching filter, ordered
+// by code. It exists so an agent can look up codes it needs instead of
+// being handed the whole chart of accounts in its prompt; the bookkeeping
+// tool
 // layer wraps it as a model-callable tool. Matching the chart against the
 // filter happens in memory -- the repository load is the same Accounts call
 // the prompt renderer already makes -- so no persistence adapter has to

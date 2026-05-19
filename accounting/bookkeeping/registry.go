@@ -94,9 +94,9 @@ func (r Registry) Execute(ctx context.Context, intent Intent) (accounting.Journa
 	return route.execute(ctx, intent)
 }
 
-// Kinds returns the IntentKinds the Registry routes, sorted, so a test
-// can assert they match Intents() and the agent can report its
-// vocabulary without reaching into the route table.
+// Kinds returns the sorted set of IntentKinds the Registry routes. A test
+// can assert they match Intents(), and the agent can report its vocabulary
+// without reaching into the route table.
 func (r Registry) Kinds() []IntentKind {
 	out := make([]IntentKind, 0, len(r.routes))
 	for kind := range r.routes {

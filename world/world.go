@@ -71,14 +71,12 @@ type Relationship struct {
 	Reputation int `json:"reputation"` // -100 to 100
 }
 
-// Location is a place in the game world.
 type Location struct {
 	ID          string   `json:"id"`
 	Name        string   `json:"name"`
 	Connections []string `json:"connections"` // IDs of reachable locations
 }
 
-// Actor is a character (NPC or player) in the game world.
 type Actor struct {
 	ID          string      `json:"id"`
 	Name        string      `json:"name"`
@@ -88,14 +86,12 @@ type Actor struct {
 	Personality Personality `json:"personality"`
 }
 
-// Item is an object in the game world.
 type Item struct {
 	ID    string `json:"id"`
 	Name  string `json:"name"`
 	Value int    `json:"value"`
 }
 
-// WorldState is a snapshot of the game world at one point in time.
 type WorldState struct {
 	Locations map[string]Location     `json:"locations"`
 	Actors    map[string]Actor        `json:"actors"`
@@ -103,12 +99,10 @@ type WorldState struct {
 	Relations map[string]Relationship `json:"relations"` // key: "fromID:toID"
 }
 
-// RelationKey builds the map key for WorldState.Relations.
 func RelationKey(from, to string) string {
 	return from + ":" + to
 }
 
-// Action is a proposed game action within an NPCIntent.
 type Action struct {
 	Type       ActionType `json:"type"`
 	TargetID   string     `json:"target_id,omitempty"`
@@ -116,8 +110,6 @@ type Action struct {
 	LocationID string     `json:"location_id,omitempty"`
 }
 
-// NPCIntent is the typed output of an NPC reasoning step. It carries the
-// dialogue, emotional state, and proposed action for one turn.
 type NPCIntent struct {
 	Say     string `json:"say"`
 	Emotion string `json:"emotion"`

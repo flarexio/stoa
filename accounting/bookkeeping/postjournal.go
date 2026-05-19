@@ -19,8 +19,8 @@ import (
 // when multiple ledgers share a transport.
 const SubjectLedger = "accounting.journal"
 
-// Clock returns the time a posted journal entry is stamped with. Default
-// is time.Now().UTC(); tests inject a deterministic clock.
+// Clock is the time source for timestamping posted entries. Default is
+// time.Now().UTC(); tests inject a deterministic clock.
 type Clock func() time.Time
 
 // PostJournal is the "post a journal entry" use case. It validates a

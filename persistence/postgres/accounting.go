@@ -130,9 +130,7 @@ func (r *accountingRepository) Branches(ctx context.Context) ([]accounting.Branc
 }
 
 // Entries returns every posted entry sorted by sequence, each with its
-// lines populated. The implementation does one query per table -- one
-// for entries, one for lines spanning every entry id -- then stitches
-// them in memory so the projection is exposed by value.
+// lines populated. One query per table, stitched in memory.
 func (r *accountingRepository) Entries(ctx context.Context) ([]accounting.JournalEntry, error) {
 	rows, err := r.q.ListEntries(ctx)
 	if err != nil {
@@ -261,8 +259,8 @@ func (r *accountingRepository) Apply(ctx context.Context, evt accounting.Journal
 	return nil
 }
 
-// LastSequence returns the broker sequence of the most recent applied
-// JournalPosted on subject, or 0 when no event has been seen yet.
+// LastSequence returns the broker sequence of the most recent JournalPosted
+// on subject, or 0 when no event has been seen yet.
 func (r *accountingRepository) LastSequence(ctx context.Context, subject string) (uint64, error) {
 	seq, err := r.q.GetLastSequence(ctx, subject)
 	if err != nil {

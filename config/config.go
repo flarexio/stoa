@@ -24,13 +24,9 @@ import (
 // single-sourced.
 const Filename = "config.yaml"
 
-// DefaultDir returns the per-user work directory the stoa CLI uses when
-// --work-dir is not provided: ~/.flarex/stoa. The CLI reads config.yaml
-// from this directory today and may grow other per-user state
-// (credentials, cache, local sqlite, etc.) under the same root later,
-// which is why the name is "work" rather than "config". The directory
-// and the config.yaml inside it are both required at run time; callers
-// do not fall back to in-memory defaults when either is missing.
+// DefaultDir returns ~/.flarex/stoa, the per-user work directory when
+// --work-dir is not provided. The CLI may grow other per-user state
+// (credentials, cache, local sqlite) under this root.
 func DefaultDir() (string, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -68,7 +64,6 @@ const (
 	EngineOpenAI   EngineKind = "openai"
 )
 
-// Config is the decoded representation of config.yaml.
 type Config struct {
 	Persistence Persistence `yaml:"persistence"`
 	Messaging   Messaging   `yaml:"messaging"`
@@ -157,9 +152,8 @@ func (c *Config) applyDefaults() {
 	}
 }
 
-// Validate returns an error when the selected kinds are unknown or when
-// the block a selected kind requires has been left empty. The error is
-// joined so a single Load call surfaces every problem at once.
+// Validate checks selected kinds are known and required blocks are not empty.
+// Errors are joined so a single Load call surfaces every problem at once.
 func (c *Config) Validate() error {
 	var errs []error
 

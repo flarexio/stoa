@@ -189,14 +189,16 @@ stoa/
 ├── messaging/             # EventBus adapters (inproc, nats)
 ├── config/                # config.yaml loader for cmd/stoa
 ├── harness/
-│   └── loop/              # Typed reason-validate-execute runner
+│   ├── loop/              # Typed reason-validate-execute runner
+│   └── validator/         # Shared validation helpers and LLM feedback formatting
 ├── llm/                   # Shared reasoning contracts and prompt rendering
 │   └── openai/            # OpenAI provider adapter
 ├── testdata/
 │   ├── scenarios/         # NPC scenario fixtures (e.g. tavern.json)
 │   └── accounting/        # Bookkeeping scenario fixtures (e.g. aws_bill.json)
 └── docs/
-    └── architecture.md
+    ├── architecture.md
+    └── accounting.md
 ```
 
 Future features should follow the same shape: a domain package for business concepts and invariants, and an agent package for orchestration and feature-specific prompting. Provider adapters stay outside the feature package unless the feature genuinely owns that infrastructure.

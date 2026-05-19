@@ -11,7 +11,6 @@ type ReasoningEngine[TIntent any] interface {
 	Predict(ctx context.Context, input ReasoningInput) (ReasoningResult[TIntent], error)
 }
 
-// ReasoningInput is the complete context for one reasoning cycle.
 type ReasoningInput struct {
 	Task         string
 	Instructions string
@@ -43,11 +42,9 @@ const (
 	MessageRoleAssistant MessageRole = "assistant"
 )
 
-// ReasoningResult is the structured output expected from an agent reasoning
-// step: evidence first, then an auditable rationale, then either a typed
-// intent or a set of tool calls. A turn yields one or the other -- when
-// ToolCalls is non-empty the model is asking for information before it can
-// propose a final Intent.
+// ReasoningResult holds evidence, rationale, and either a typed intent or
+// tool calls. When ToolCalls is non-empty the model is asking for
+// information before it can propose a final Intent.
 type ReasoningResult[TIntent any] struct {
 	Evidence  []EvidenceRef `json:"evidence"`
 	Rationale string        `json:"rationale"`
@@ -55,12 +52,9 @@ type ReasoningResult[TIntent any] struct {
 	ToolCalls []ToolCall    `json:"tool_calls,omitempty"`
 }
 
-// ToolCall is the model's request to invoke a named tool mid-reasoning.
-// Args is the raw JSON the model supplied; the tool handler decodes it into
-// its own typed parameters -- the same pattern Decoder uses for an intent,
-// so a tool argument stays a typed contract rather than free-form text. The
-// harness loop never inspects Args or a tool's result, which keeps the tool
-// mechanism generic across features.
+// ToolCall asks the harness to invoke a named tool mid-reasoning. Args is
+// the raw JSON the model supplied; the tool handler decodes it into its own
+// typed parameters. The harness loop never inspects Args or a tool's result.
 type ToolCall struct {
 	Name string          `json:"name"`
 	Args json.RawMessage `json:"args,omitempty"`
@@ -109,8 +103,8 @@ const (
 	EventToolResult      EventKind = "tool_result"
 )
 
-// Observation is the typed result returned by executors after a valid intent is
-// acted on. Use cases can feed it back into the next cycle as an event.
+// Observation is returned by executors after a valid intent is acted on.
+// Use cases can feed it back into the next cycle as an event.
 type Observation struct {
 	Summary string            `json:"summary"`
 	Fields  map[string]string `json:"fields,omitempty"`

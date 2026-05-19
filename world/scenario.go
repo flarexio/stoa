@@ -7,9 +7,9 @@ import (
 	"os"
 )
 
-// Scenario wraps a WorldState with optional metadata used by demos and CLI
-// loaders. The metadata fields are advisory; only WorldState participates in
-// validation.
+// Scenario wraps a WorldState with optional metadata for demos and CLI
+// loaders. The metadata fields are advisory; only WorldState participates
+// in validation.
 type Scenario struct {
 	Name    string     `json:"name,omitempty"`
 	Summary string     `json:"summary,omitempty"`

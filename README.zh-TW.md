@@ -185,14 +185,16 @@ stoa/
 ├── messaging/             # EventBus 轉接器（inproc、nats）
 ├── config/                # cmd/stoa 的 config.yaml 載入器
 ├── harness/
-│   └── loop/              # 具型別的推理、驗證、執行 runner
+│   ├── loop/              # 具型別的推理、驗證、執行 runner
+│   └── validator/         # 共用驗證輔助工具與 LLM 回饋格式化
 ├── llm/                   # 共用推理合約與提示詞渲染
 │   └── openai/            # OpenAI 供應商轉接器
 ├── testdata/
 │   ├── scenarios/         # NPC 場景樣本（例如 tavern.json）
 │   └── accounting/        # 記帳場景樣本（例如 aws_bill.json）
 └── docs/
-    └── architecture.md
+    ├── architecture.md
+    └── accounting.md
 ```
 
 未來的功能也應該遵循同樣形狀：領域套件放業務概念與不變條件，代理套件放流程編排與功能專屬提示詞。供應商轉接器應該留在功能套件外，除非該功能真的擁有那個基礎設施。

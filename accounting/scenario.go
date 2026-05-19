@@ -10,14 +10,10 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// Scenario is the on-disk shape of an accounting fixture. It carries the
-// company, chart of accounts, branches, and periods that seed a
-// LedgerRepository before the bookkeeper agent starts posting entries.
-//
-// Scenario intentionally does not carry journal entries: those arrive
-// through the event stream as JournalPosted, never as static fixture
-// data, so the projection is always built from the same code path in
-// tests and in production.
+// Scenario seeds a LedgerRepository with company, accounts, branches,
+// and periods. It intentionally does not carry journal entries: those
+// arrive through the event stream as JournalPosted, so the projection
+// is always built from the same code path in tests and in production.
 type Scenario struct {
 	Name        string    `json:"name,omitempty" yaml:"name,omitempty"`
 	Description string    `json:"description,omitempty" yaml:"description,omitempty"`

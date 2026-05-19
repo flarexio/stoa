@@ -31,4 +31,4 @@ llm:
   # openai   -> drives a real LLM; needs model + OPENAI_API_KEY.
   # The --engine / --model CLI flags override this block when set.
   engine: openai
-  model: gpt-4.1-mini
+  model: gpt-5.4-mini
