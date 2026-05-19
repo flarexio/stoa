@@ -8,6 +8,7 @@ import (
 
 	"github.com/flarexio/stoa/accounting"
 	"github.com/flarexio/stoa/accounting/agent"
+	"github.com/flarexio/stoa/accounting/usecase"
 	"github.com/flarexio/stoa/llm"
 	"github.com/flarexio/stoa/messaging/inproc"
 	"github.com/flarexio/stoa/persistence/memory"
@@ -52,10 +53,10 @@ func awsBillScenario(t *testing.T) (accounting.Scenario, accounting.LedgerReposi
 // wireBus subscribes the standard apply handler so the bus's published
 // events land in the repo's projection. Returned as a convenience for
 // test setup.
-func wireBus(t *testing.T, repo accounting.LedgerRepository) agent.EventBus {
+func wireBus(t *testing.T, repo accounting.LedgerRepository) usecase.EventBus {
 	t.Helper()
 	bus := inproc.NewAccountingBus()
-	if err := bus.Subscribe(agent.EventHandlerFunc(func(ctx context.Context, evt accounting.JournalPosted) error {
+	if err := bus.Subscribe(usecase.EventHandlerFunc(func(ctx context.Context, evt accounting.JournalPosted) error {
 		return repo.Apply(ctx, evt)
 	})); err != nil {
 		t.Fatalf("subscribe: %v", err)

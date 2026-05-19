@@ -17,6 +17,7 @@ import (
 
 	"github.com/flarexio/stoa/accounting"
 	"github.com/flarexio/stoa/accounting/agent"
+	"github.com/flarexio/stoa/accounting/usecase"
 	"github.com/flarexio/stoa/config"
 	"github.com/flarexio/stoa/llm"
 	"github.com/flarexio/stoa/llm/openai"
@@ -61,15 +62,15 @@ func buildRepository(ctx context.Context, cfg config.Persistence) (accounting.Le
 	}
 }
 
-// buildMessaging materialises the agent.EventBus chosen by cfg and
+// buildMessaging materialises the usecase.EventBus chosen by cfg and
 // subscribes a single handler that applies events to repo. The bus's
 // Close method tears down whichever transport was opened.
-func buildMessaging(ctx context.Context, cfg config.Messaging, repo accounting.LedgerRepository) (agent.EventBus, error) {
+func buildMessaging(ctx context.Context, cfg config.Messaging, repo accounting.LedgerRepository) (usecase.EventBus, error) {
 	bus, err := openBus(ctx, cfg)
 	if err != nil {
 		return nil, err
 	}
-	apply := agent.EventHandlerFunc(func(ctx context.Context, evt accounting.JournalPosted) error {
+	apply := usecase.EventHandlerFunc(func(ctx context.Context, evt accounting.JournalPosted) error {
 		return repo.Apply(ctx, evt)
 	})
 	if err := bus.Subscribe(apply); err != nil {
@@ -80,7 +81,7 @@ func buildMessaging(ctx context.Context, cfg config.Messaging, repo accounting.L
 }
 
 // openBus opens the EventBus chosen by cfg without subscribing yet.
-func openBus(ctx context.Context, cfg config.Messaging) (agent.EventBus, error) {
+func openBus(ctx context.Context, cfg config.Messaging) (usecase.EventBus, error) {
 	switch cfg.Kind {
 	case config.MessagingInproc:
 		return inproc.NewAccountingBus(), nil

@@ -8,17 +8,17 @@ import (
 	"github.com/nats-io/nats.go/jetstream"
 
 	"github.com/flarexio/stoa/accounting"
-	"github.com/flarexio/stoa/accounting/agent"
+	"github.com/flarexio/stoa/accounting/usecase"
 )
 
-// accountingBus is the NATS JetStream backed agent.EventBus for
+// accountingBus is the NATS JetStream backed usecase.EventBus for
 // the accounting domain. It encodes JournalPosted events to JSON,
 // reuses the generic *bus for transport, and translates broker
 // rejections into accounting.ErrConcurrentUpdate so the inproc and
 // NATS transports surface the same sentinel.
 //
-// Entry.ID is producer-assigned (see agent.Bookkeeper) before Publish
-// is called: the agent reads the current last_sequence from the
+// Entry.ID is producer-assigned (see usecase.PostJournal) before Publish
+// is called: the use case reads the current last_sequence from the
 // repository, adds one, formats it with accounting.FormatEntryID, and
 // stamps the result on the event. The transport leaves Entry.ID alone
 // and only stamps Subject + Sequence as broker metadata; consumers
@@ -29,10 +29,10 @@ type accountingBus struct {
 }
 
 // NewAccountingBus opens a NATS JetStream connection and returns a
-// agent.EventBus configured for accounting JournalPosted events.
+// usecase.EventBus configured for accounting JournalPosted events.
 // Close on the returned bus drains the consume loop and releases the
 // connection.
-func NewAccountingBus(ctx context.Context, cfg Config) (agent.EventBus, error) {
+func NewAccountingBus(ctx context.Context, cfg Config) (usecase.EventBus, error) {
 	b, err := connect(ctx, cfg)
 	if err != nil {
 		return nil, err
@@ -71,7 +71,7 @@ func (a *accountingBus) Publish(ctx context.Context, evt accounting.JournalPoste
 // the message; a handler error (or a decode error) Naks it for
 // redelivery. Subscribing twice on the same bus returns an error;
 // tear it down via Close before re-subscribing.
-func (a *accountingBus) Subscribe(handler agent.EventHandler) error {
+func (a *accountingBus) Subscribe(handler usecase.EventHandler) error {
 	return a.bus.subscribeMessages(func(msg jetstream.Msg) {
 		ctx, cancel := context.WithTimeout(context.Background(), a.bus.ackWait)
 		defer cancel()
@@ -120,7 +120,7 @@ func decodeAccountingEvent(body []byte, subject string, sequence uint64) (accoun
 }
 
 // stampAccountingPubAck applies the broker-assigned subject and sequence to an
-// event. Entry.ID is not touched: the producer (agent.Bookkeeper)
+// event. Entry.ID is not touched: the producer (usecase.PostJournal)
 // picks it before publishing and the transport carries it through the
 // wire unchanged.
 func stampAccountingPubAck(evt accounting.JournalPosted, subject string, sequence uint64) accounting.JournalPosted {
