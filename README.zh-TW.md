@@ -179,7 +179,7 @@ stoa/
 ├── world/                 # 遊戲領域：世界狀態、角色、物品、NPCIntent、驗證器
 │   └── agent/             # NPC 代理迴圈與提示詞渲染
 ├── accounting/            # 會計領域：帳本、科目、期間、驗證器、事件
-│   ├── usecase/           # PostJournal/ReverseJournal use case、command registry、事件 port
+│   ├── bookkeeping/       # PostJournal/ReverseJournal use case、Intent union、registry、事件 port
 │   └── agent/             # 記帳代理迴圈與提示詞渲染
 ├── persistence/           # LedgerRepository 轉接器（memory、postgres）
 ├── messaging/             # EventBus 轉接器（inproc、nats）

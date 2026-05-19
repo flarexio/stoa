@@ -16,7 +16,7 @@ checklist of things easy to miss in a PR.
 ## What to flag
 
 - **Wrong-direction imports.** A domain package importing `llm/`, its own
-  `usecase/` or `agent/` subpackage, or any provider SDK. A `usecase/`
+  `bookkeeping/` or `agent/` subpackage, or any provider SDK. A `bookkeeping/`
   package importing its sibling `agent/` or any LLM code. `harness/`
   importing a provider SDK. `llm/` importing a feature-specific package.
 - **Rules in prompts that should be validators.** If a constraint can be

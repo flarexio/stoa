@@ -183,7 +183,7 @@ stoa/
 ├── world/                 # Game domain: world state, actors, items, NPCIntent, validator
 │   └── agent/             # NPC agent loop and prompt rendering
 ├── accounting/            # Accounting domain: ledger, accounts, periods, validator, events
-│   ├── usecase/           # PostJournal/ReverseJournal use cases, command registry, event ports
+│   ├── bookkeeping/       # PostJournal/ReverseJournal use cases, Intent union, registry, event ports
 │   └── agent/             # Bookkeeping agent loop and prompt rendering
 ├── persistence/           # LedgerRepository adapters (memory, postgres)
 ├── messaging/             # EventBus adapters (inproc, nats)
