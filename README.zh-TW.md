@@ -147,7 +147,7 @@ go run ./cmd/stoa npc-run testdata/scenarios/tavern.json --actor mira
 → 驗證錯誤以具型別事件回饋以供自我修正
 ```
 
-`accounting/` 擁有領域模型——科目表、會計期間、分錄和驗證規則——不依賴任何 LLM。`accounting/usecase/` 擁有 `PostJournal` 與 `ReverseJournal` 操作（先驗證再執行，不需 LLM 即可呼叫）、路由它們的 `Command` union 與 registry、以及事件傳輸 port。`post_journal` 攜帶 `JournalIntent`，而 `reverse_journal` 攜帶 `ReverseIntent`，它會先解析成 `JournalIntent` 再驗證。`accounting/agent/` 擁有代理迴圈和功能專屬的提示詞渲染器。
+`accounting/` 擁有領域模型——科目表、會計期間、分錄和驗證規則——不依賴任何 LLM。`accounting/bookkeeping/` 擁有 `PostJournal` 與 `ReverseJournal` 操作（先驗證再執行，不需 LLM 即可呼叫）、路由它們的 `Intent` union 與 registry、以及事件傳輸 port。`post_journal` 攜帶 `JournalIntent`，而 `reverse_journal` 攜帶 `ReverseIntent`，它會先解析成 `JournalIntent` 再驗證。`accounting/agent/` 擁有代理迴圈和功能專屬的提示詞渲染器。
 
 `cmd/stoa book-run` 可從命令列跑這個迴圈；可執行的範例與設定方式見 [`docs/accounting.md`](docs/accounting.md)。
 

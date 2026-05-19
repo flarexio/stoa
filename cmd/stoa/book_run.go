@@ -11,22 +11,22 @@ import (
 
 	"github.com/flarexio/stoa/accounting"
 	"github.com/flarexio/stoa/accounting/agent"
-	"github.com/flarexio/stoa/accounting/usecase"
+	"github.com/flarexio/stoa/accounting/bookkeeping"
 	"github.com/flarexio/stoa/llm"
 )
 
 // bookRunOutput is the machine-readable JSON document the CLI prints on
 // success.
 type bookRunOutput struct {
-	Scenario    string                    `json:"scenario,omitempty"`
-	Description string                    `json:"description,omitempty"`
-	Request     string                    `json:"request"`
-	Turns       int                       `json:"turns"`
-	Intent      usecase.BookkeepingIntent `json:"intent"`
-	Entry       accounting.JournalEntry   `json:"entry"`
-	Observation llm.Observation           `json:"observation"`
-	Events      []llm.CycleEvent          `json:"events"`
-	Feedback    []string                  `json:"feedback"`
+	Scenario    string                  `json:"scenario,omitempty"`
+	Description string                  `json:"description,omitempty"`
+	Request     string                  `json:"request"`
+	Turns       int                     `json:"turns"`
+	Intent      bookkeeping.Intent      `json:"intent"`
+	Entry       accounting.JournalEntry `json:"entry"`
+	Observation llm.Observation         `json:"observation"`
+	Events      []llm.CycleEvent        `json:"events"`
+	Feedback    []string                `json:"feedback"`
 }
 
 func newBookRunCommand(stdout io.Writer) *cli.Command {

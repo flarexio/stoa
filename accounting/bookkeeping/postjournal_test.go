@@ -1,4 +1,4 @@
-package usecase_test
+package bookkeeping_test
 
 import (
 	"context"
@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/flarexio/stoa/accounting"
-	"github.com/flarexio/stoa/accounting/usecase"
+	"github.com/flarexio/stoa/accounting/bookkeeping"
 	"github.com/flarexio/stoa/messaging/inproc"
 	"github.com/flarexio/stoa/persistence/memory"
 )
@@ -37,14 +37,14 @@ func ledgerScenario() accounting.Scenario {
 // an inproc bus whose published events are applied back into that
 // repository's projection -- the same publish -> handler -> Apply path the
 // CLI wires, with no LLM and no agent in the picture.
-func seededLedger(t *testing.T) (accounting.LedgerRepository, usecase.EventBus) {
+func seededLedger(t *testing.T) (accounting.LedgerRepository, bookkeeping.EventBus) {
 	t.Helper()
 	repo := memory.NewAccountingRepository()
 	if err := ledgerScenario().Seed(context.Background(), repo); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
 	bus := inproc.NewAccountingBus()
-	apply := usecase.EventHandlerFunc(func(ctx context.Context, evt accounting.JournalPosted) error {
+	apply := bookkeeping.EventHandlerFunc(func(ctx context.Context, evt accounting.JournalPosted) error {
 		return repo.Apply(ctx, evt)
 	})
 	if err := bus.Subscribe(apply); err != nil {
@@ -78,7 +78,7 @@ func TestPostJournal_HandlePostsWithoutLLM(t *testing.T) {
 	ctx := context.Background()
 	repo, bus := seededLedger(t)
 
-	uc := usecase.PostJournal{Repo: repo, Publisher: bus, Clock: fixedClock}
+	uc := bookkeeping.PostJournal{Repo: repo, Publisher: bus, Clock: fixedClock}
 	entry, err := uc.Handle(ctx, balancedIntent())
 	if err != nil {
 		t.Fatalf("handle: %v", err)
@@ -109,7 +109,7 @@ func TestPostJournal_HandleRejectsInvalidIntent(t *testing.T) {
 	intent := balancedIntent()
 	intent.Lines[1].Amount = 9000 // credit no longer equals debit
 
-	uc := usecase.PostJournal{Repo: repo, Publisher: bus, Clock: fixedClock}
+	uc := bookkeeping.PostJournal{Repo: repo, Publisher: bus, Clock: fixedClock}
 	if _, err := uc.Handle(ctx, intent); err == nil {
 		t.Fatal("expected Handle to reject an unbalanced intent")
 	}
@@ -131,7 +131,7 @@ func TestPostJournal_ValidateAndExecuteAreSeparable(t *testing.T) {
 	ctx := context.Background()
 	repo, bus := seededLedger(t)
 
-	uc := usecase.PostJournal{Repo: repo, Publisher: bus, Clock: fixedClock}
+	uc := bookkeeping.PostJournal{Repo: repo, Publisher: bus, Clock: fixedClock}
 	intent := balancedIntent()
 
 	if err := uc.Validate(ctx, intent); err != nil {

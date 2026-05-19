@@ -151,7 +151,7 @@ bookkeeping request
 → validation errors feed back as typed events for self-correction
 ```
 
-`accounting/` owns the domain model — chart of accounts, periods, journal entries, and validation rules — with no LLM dependency. `accounting/usecase/` owns the `PostJournal` and `ReverseJournal` operations (validate-then-execute, callable without an LLM), the `Command` union and registry that route to them, and the event-transport ports. `post_journal` carries a `JournalIntent`, while `reverse_journal` carries a `ReverseIntent` that resolves to a `JournalIntent` before validation. `accounting/agent/` owns the agent loop and the feature-specific prompt renderer.
+`accounting/` owns the domain model — chart of accounts, periods, journal entries, and validation rules — with no LLM dependency. `accounting/bookkeeping/` owns the `PostJournal` and `ReverseJournal` operations (validate-then-execute, callable without an LLM), the `Intent` union and registry that route to them, and the event-transport ports. `post_journal` carries a `JournalIntent`, while `reverse_journal` carries a `ReverseIntent` that resolves to a `JournalIntent` before validation. `accounting/agent/` owns the agent loop and the feature-specific prompt renderer.
 
 `cmd/stoa book-run` runs this loop from the command line; see [`docs/accounting.md`](docs/accounting.md) for the runnable demo and configuration.
 

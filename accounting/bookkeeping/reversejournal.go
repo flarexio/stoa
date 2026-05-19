@@ -1,4 +1,4 @@
-package usecase
+package bookkeeping
 
 import (
 	"context"
@@ -78,18 +78,18 @@ func (uc ReverseJournal) post() PostJournal {
 // and a description that records the reversal and the intent's reason.
 func (uc ReverseJournal) reversalIntent(ctx context.Context, intent ReverseIntent) (accounting.JournalIntent, error) {
 	if uc.Repo == nil {
-		return accounting.JournalIntent{}, errors.New("usecase: reverse journal has no repository")
+		return accounting.JournalIntent{}, errors.New("bookkeeping: reverse journal has no repository")
 	}
 	if intent.EntryID == "" {
-		return accounting.JournalIntent{}, errors.New("usecase: reverse journal needs an entry_id")
+		return accounting.JournalIntent{}, errors.New("bookkeeping: reverse journal needs an entry_id")
 	}
 
 	entry, ok, err := uc.Repo.Entry(ctx, intent.EntryID)
 	if err != nil {
-		return accounting.JournalIntent{}, fmt.Errorf("usecase: load entry %q: %w", intent.EntryID, err)
+		return accounting.JournalIntent{}, fmt.Errorf("bookkeeping: load entry %q: %w", intent.EntryID, err)
 	}
 	if !ok {
-		return accounting.JournalIntent{}, fmt.Errorf("usecase: entry %q is not in the ledger", intent.EntryID)
+		return accounting.JournalIntent{}, fmt.Errorf("bookkeeping: entry %q is not in the ledger", intent.EntryID)
 	}
 
 	lines := make([]accounting.JournalLine, len(entry.Lines))

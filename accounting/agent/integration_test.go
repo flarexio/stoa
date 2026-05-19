@@ -8,7 +8,7 @@ import (
 
 	"github.com/flarexio/stoa/accounting"
 	"github.com/flarexio/stoa/accounting/agent"
-	"github.com/flarexio/stoa/accounting/usecase"
+	"github.com/flarexio/stoa/accounting/bookkeeping"
 	"github.com/flarexio/stoa/llm/openai"
 )
 
@@ -33,7 +33,7 @@ func TestAgent_OpenAI(t *testing.T) {
 		t.Fatalf("new renderer: %v", err)
 	}
 
-	engine, err := openai.NewAdapter(openai.Config[usecase.BookkeepingIntent]{
+	engine, err := openai.NewAdapter(openai.Config[bookkeeping.Intent]{
 		APIKey:       apiKey,
 		Model:        "gpt-5.4-mini",
 		OutputFormat: openai.OutputFormatJSONObject,

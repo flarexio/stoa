@@ -9,7 +9,7 @@ import (
 
 	"github.com/flarexio/stoa/accounting"
 	"github.com/flarexio/stoa/accounting/agent"
-	"github.com/flarexio/stoa/accounting/usecase"
+	"github.com/flarexio/stoa/accounting/bookkeeping"
 	"github.com/flarexio/stoa/llm"
 )
 
@@ -21,10 +21,10 @@ func TestAgent_RunsToolCallBeforePosting(t *testing.T) {
 	bus := wireBus(t, repo)
 
 	var calls int
-	engine := fakeEngineFunc(func(_ context.Context, input llm.ReasoningInput) (llm.ReasoningResult[usecase.BookkeepingIntent], error) {
+	engine := fakeEngineFunc(func(_ context.Context, input llm.ReasoningInput) (llm.ReasoningResult[bookkeeping.Intent], error) {
 		calls++
 		if calls == 1 {
-			return llm.ReasoningResult[usecase.BookkeepingIntent]{
+			return llm.ReasoningResult[bookkeeping.Intent]{
 				Rationale: "look up the credit-card account first",
 				ToolCalls: []llm.ToolCall{{
 					Name: "find_accounts",
@@ -41,7 +41,7 @@ func TestAgent_RunsToolCallBeforePosting(t *testing.T) {
 		if !sawTool {
 			t.Error("second turn did not receive the find_accounts result in its events")
 		}
-		return llm.ReasoningResult[usecase.BookkeepingIntent]{
+		return llm.ReasoningResult[bookkeeping.Intent]{
 			Rationale: "post the balanced entry",
 			Intent:    postIntent(balancedAWSIntent()),
 		}, nil

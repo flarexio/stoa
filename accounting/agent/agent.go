@@ -14,7 +14,7 @@ import (
 	"fmt"
 
 	"github.com/flarexio/stoa/accounting"
-	"github.com/flarexio/stoa/accounting/usecase"
+	"github.com/flarexio/stoa/accounting/bookkeeping"
 	"github.com/flarexio/stoa/harness/loop"
 	"github.com/flarexio/stoa/llm"
 )
@@ -25,18 +25,18 @@ import (
 // repo.Apply; that is the consumer's job and runs inside the EventHandler
 // subscribed to the publisher.
 type Bookkeeper struct {
-	Engine    llm.ReasoningEngine[usecase.BookkeepingIntent]
+	Engine    llm.ReasoningEngine[bookkeeping.Intent]
 	Repo      accounting.LedgerRepository
-	Publisher usecase.EventPublisher
+	Publisher bookkeeping.EventPublisher
 	Subject   string
-	Clock     usecase.Clock
+	Clock     bookkeeping.Clock
 	MaxTurns  int
 	Sink      loop.EventSink
 }
 
 // Result is the outcome of one bookkeeping cycle.
 type Result struct {
-	Intent      usecase.BookkeepingIntent
+	Intent      bookkeeping.Intent
 	Entry       accounting.JournalEntry
 	Observation llm.Observation
 	Turns       int
@@ -57,14 +57,14 @@ func (a Bookkeeper) Book(ctx context.Context, request string) (Result, error) {
 		return Result{}, errors.New("bookkeeper: agent has no event publisher")
 	}
 
-	registry := usecase.NewBookkeepingRegistry(a.Repo, a.Publisher, a.Clock, a.Subject)
+	registry := bookkeeping.NewBookkeepingRegistry(a.Repo, a.Publisher, a.Clock, a.Subject)
 
 	// The registry owns validate + execute for every intent. The agent
 	// only adapts the posted entry into the llm.Observation the harness
 	// loop feeds back to the model; a non-LLM caller drives a use case's
 	// Handle directly instead.
 	var posted accounting.JournalEntry
-	executor := loop.ExecutorFunc[usecase.BookkeepingIntent](func(ctx context.Context, intent usecase.BookkeepingIntent) (llm.Observation, error) {
+	executor := loop.ExecutorFunc[bookkeeping.Intent](func(ctx context.Context, intent bookkeeping.Intent) (llm.Observation, error) {
 		entry, err := registry.Execute(ctx, intent)
 		if err != nil {
 			return llm.Observation{}, err
@@ -81,7 +81,7 @@ func (a Bookkeeper) Book(ctx context.Context, request string) (Result, error) {
 		}, nil
 	})
 
-	runner := loop.Runner[usecase.BookkeepingIntent]{
+	runner := loop.Runner[bookkeeping.Intent]{
 		Engine:    a.Engine,
 		Validator: registry,
 		Executor:  executor,

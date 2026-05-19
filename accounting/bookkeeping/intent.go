@@ -1,4 +1,4 @@
-package usecase
+package bookkeeping
 
 import "github.com/flarexio/stoa/accounting"
 
@@ -12,16 +12,16 @@ const (
 	IntentReverseJournal IntentKind = "reverse_journal"
 )
 
-// BookkeepingIntent is the discriminated union the bookkeeping agent's
+// Intent is the discriminated union the bookkeeping agent's
 // model emits. Kind names the use case to run; the payload field matching
 // Kind carries its typed arguments. Exactly one payload is read -- the one
 // Kind selects -- and any others are ignored.
 //
 // Modelling the agent's whole vocabulary as one type lets a single harness
-// loop, generic over BookkeepingIntent, route to many use cases: the loop
-// validates and executes a BookkeepingIntent without ever learning the
+// loop, generic over Intent, route to many use cases: the loop
+// validates and executes a Intent without ever learning the
 // union has variants, and the Registry does the dumb dispatch on Kind.
-type BookkeepingIntent struct {
+type Intent struct {
 	Kind    IntentKind                `json:"kind"`
 	Post    *accounting.JournalIntent `json:"post_journal,omitempty"`
 	Reverse *ReverseIntent            `json:"reverse_journal,omitempty"`

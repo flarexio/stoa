@@ -25,7 +25,7 @@
 // mutating the original.
 //
 // This invariant also gives Entry.ID a clean meaning: it is assigned
-// once by the producing use case (see usecase.PostJournal) as
+// once by the producing use case (see bookkeeping.PostJournal) as
 // FormatEntryID(repo.LastSequence(subject) + 1) just before Publish,
 // the transport carries it through the wire unchanged, and the broker's
 // optimistic-concurrency check rejects any racing producer that

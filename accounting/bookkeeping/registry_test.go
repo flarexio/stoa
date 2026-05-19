@@ -1,4 +1,4 @@
-package usecase_test
+package bookkeeping_test
 
 import (
 	"context"
@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/flarexio/stoa/accounting/usecase"
+	"github.com/flarexio/stoa/accounting/bookkeeping"
 )
 
 // TestRegistry_RoutesPostJournal drives a post_journal intent through the
@@ -14,10 +14,10 @@ import (
 func TestRegistry_RoutesPostJournal(t *testing.T) {
 	ctx := context.Background()
 	repo, bus := seededLedger(t)
-	reg := usecase.NewBookkeepingRegistry(repo, bus, fixedClock, "")
+	reg := bookkeeping.NewBookkeepingRegistry(repo, bus, fixedClock, "")
 
 	intent := balancedIntent()
-	intentEnvelope := usecase.BookkeepingIntent{Kind: usecase.IntentPostJournal, Post: &intent}
+	intentEnvelope := bookkeeping.Intent{Kind: bookkeeping.IntentPostJournal, Post: &intent}
 
 	if err := reg.Validate(ctx, intentEnvelope); err != nil {
 		t.Fatalf("validate: %v", err)
@@ -37,12 +37,12 @@ func TestRegistry_RoutesPostJournal(t *testing.T) {
 func TestRegistry_RoutesReverseJournal(t *testing.T) {
 	ctx := context.Background()
 	repo, bus := seededLedger(t)
-	reg := usecase.NewBookkeepingRegistry(repo, bus, fixedClock, "")
+	reg := bookkeeping.NewBookkeepingRegistry(repo, bus, fixedClock, "")
 
 	original := postOne(t, repo, bus)
 
-	reverse := usecase.ReverseIntent{EntryID: original.ID, Reason: "wrong amount"}
-	intentEnvelope := usecase.BookkeepingIntent{Kind: usecase.IntentReverseJournal, Reverse: &reverse}
+	reverse := bookkeeping.ReverseIntent{EntryID: original.ID, Reason: "wrong amount"}
+	intentEnvelope := bookkeeping.Intent{Kind: bookkeeping.IntentReverseJournal, Reverse: &reverse}
 
 	if err := reg.Validate(ctx, intentEnvelope); err != nil {
 		t.Fatalf("validate: %v", err)
@@ -63,9 +63,9 @@ func TestRegistry_RoutesReverseJournal(t *testing.T) {
 // validation error -- correctable feedback for the loop, not a panic.
 func TestRegistry_RejectsUnknownKind(t *testing.T) {
 	repo, bus := seededLedger(t)
-	reg := usecase.NewBookkeepingRegistry(repo, bus, fixedClock, "")
+	reg := bookkeeping.NewBookkeepingRegistry(repo, bus, fixedClock, "")
 
-	err := reg.Validate(context.Background(), usecase.BookkeepingIntent{Kind: "frobnicate"})
+	err := reg.Validate(context.Background(), bookkeeping.Intent{Kind: "frobnicate"})
 	if err == nil {
 		t.Fatal("expected an unknown intent kind to be rejected")
 	}
@@ -78,12 +78,12 @@ func TestRegistry_RejectsUnknownKind(t *testing.T) {
 // payload the model did not fill is rejected, not nil-dereferenced.
 func TestRegistry_RejectsMissingPayload(t *testing.T) {
 	repo, bus := seededLedger(t)
-	reg := usecase.NewBookkeepingRegistry(repo, bus, fixedClock, "")
+	reg := bookkeeping.NewBookkeepingRegistry(repo, bus, fixedClock, "")
 
-	if err := reg.Validate(context.Background(), usecase.BookkeepingIntent{Kind: usecase.IntentPostJournal}); err == nil {
+	if err := reg.Validate(context.Background(), bookkeeping.Intent{Kind: bookkeeping.IntentPostJournal}); err == nil {
 		t.Fatal("expected post_journal with no payload to be rejected")
 	}
-	if err := reg.Validate(context.Background(), usecase.BookkeepingIntent{Kind: usecase.IntentReverseJournal}); err == nil {
+	if err := reg.Validate(context.Background(), bookkeeping.Intent{Kind: bookkeeping.IntentReverseJournal}); err == nil {
 		t.Fatal("expected reverse_journal with no payload to be rejected")
 	}
 }
@@ -93,10 +93,10 @@ func TestRegistry_RejectsMissingPayload(t *testing.T) {
 // the prompt, so the model is never offered an intent the registry cannot
 // route, nor a routable intent the prompt never mentions.
 func TestRegistry_KindsMatchIntents(t *testing.T) {
-	reg := usecase.NewBookkeepingRegistry(nil, nil, nil, "")
+	reg := bookkeeping.NewBookkeepingRegistry(nil, nil, nil, "")
 
-	want := make([]usecase.IntentKind, 0)
-	for _, d := range usecase.Intents() {
+	want := make([]bookkeeping.IntentKind, 0)
+	for _, d := range bookkeeping.Intents() {
 		want = append(want, d.Kind)
 	}
 	slices.Sort(want)

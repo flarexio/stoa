@@ -8,7 +8,7 @@ The name comes from the Greek στοά (covered colonnade), connecting Stoic phi
 
 ### Feature domains
 - **NPC harness** (`world/`, `world/agent/`): LLM-driven game NPC that proposes typed intents validated by hard game rules. Demo: `stoa npc-run testdata/scenarios/tavern.json --actor mira`.
-- **Bookkeeping agent** (`accounting/`, `accounting/usecase/`, `accounting/agent/`): turns a natural-language request into a typed `usecase.BookkeepingIntent` and routes it through a use-case registry -- `post_journal` posts a validated double-entry journal entry, `reverse_journal` reverses an existing one -- publishing each as a `JournalPosted` event projected into a ledger repository. Domain rules and invariants in `docs/accounting.md`. Demo: `stoa book-run testdata/accounting/aws_bill.json --request "..."`.
+- **Bookkeeping agent** (`accounting/`, `accounting/bookkeeping/`, `accounting/agent/`): turns a natural-language request into a typed `bookkeeping.Intent` and routes it through a use-case registry -- `post_journal` posts a validated double-entry journal entry, `reverse_journal` reverses an existing one -- publishing each as a `JournalPosted` event projected into a ledger repository. Domain rules and invariants in `docs/accounting.md`. Demo: `stoa book-run testdata/accounting/aws_bill.json --request "..."`.
 
 ## Architecture (Clean Architecture)
 Dependencies flow inward. Code is organized **by feature**.
@@ -23,7 +23,7 @@ Dependencies flow inward. Code is organized **by feature**.
 - **Agents communicate through typed handoff objects**, never free-form text.
 - **Errors feed context back to the LLM** for self-correction rather than blind retries.
 - **Provider adapters only translate.** Prompt rendering and output decoding must be replaceable strategies; domain validation never lives in an LLM adapter.
-- **Domain, use case, and agent are separate packages.** The domain package holds entities, validators, and port interfaces (plus stdlib-only default adapters). The `usecase` subpackage holds the application operations -- each a validate + execute step callable without an LLM -- the transport ports they publish through, and, when one agent drives several, the discriminated-union intent set and registry that route to them. The agent subpackage holds the LLM-driven loop and feature-specific prompt rendering. Imports point inward only: the domain imports neither subpackage, the use case imports neither the agent nor any LLM code, and only the agent package depends on `llm`.
+- **Domain, use case, and agent are separate packages.** The domain package holds entities, validators, and port interfaces (plus stdlib-only default adapters). The `bookkeeping` subpackage holds the application operations -- each a validate + execute step callable without an LLM -- the transport ports they publish through, and, when one agent drives several, the discriminated-union intent set and registry that route to them. The agent subpackage holds the LLM-driven loop and feature-specific prompt rendering. Imports point inward only: the domain imports neither subpackage, the use case imports neither the agent nor any LLM code, and only the agent package depends on `llm`.
 
 ## The Stoa Pattern (Intent-Validator-Execution)
 To ensure "Knowing and Doing are One", every agent must follow this cycle:

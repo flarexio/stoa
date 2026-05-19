@@ -97,10 +97,10 @@ type Item struct {
 
 // WorldState is a snapshot of the game world at one point in time.
 type WorldState struct {
-	Locations map[string]Location      `json:"locations"`
-	Actors    map[string]Actor         `json:"actors"`
-	Items     map[string]Item          `json:"items"`
-	Relations map[string]Relationship  `json:"relations"` // key: "fromID:toID"
+	Locations map[string]Location     `json:"locations"`
+	Actors    map[string]Actor        `json:"actors"`
+	Items     map[string]Item         `json:"items"`
+	Relations map[string]Relationship `json:"relations"` // key: "fromID:toID"
 }
 
 // RelationKey builds the map key for WorldState.Relations.

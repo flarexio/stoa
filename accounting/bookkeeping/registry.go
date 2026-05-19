@@ -1,4 +1,4 @@
-package usecase
+package bookkeeping
 
 import (
 	"context"
@@ -10,19 +10,19 @@ import (
 
 // intentRoute is the Registry's entry for one IntentKind: how to
 // validate and how to execute that variant. Each closure pulls the
-// payload Kind selects out of the union and rejects a BookkeepingIntent whose
+// payload Kind selects out of the union and rejects a Intent whose
 // payload is absent.
 type intentRoute struct {
-	validate func(ctx context.Context, intent BookkeepingIntent) error
-	execute  func(ctx context.Context, intent BookkeepingIntent) (accounting.JournalEntry, error)
+	validate func(ctx context.Context, intent Intent) error
+	execute  func(ctx context.Context, intent Intent) (accounting.JournalEntry, error)
 }
 
-// Registry routes a BookkeepingIntent to the use case registered for its Kind. It is
+// Registry routes a Intent to the use case registered for its Kind. It is
 // deliberately dumb dispatch -- a map from IntentKind to a validate /
 // execute pair, with no behaviour of its own beyond the lookup.
 //
 // Registry.Validate and Registry.Execute have the shapes harness/loop's
-// Validator and Executor expect over BookkeepingIntent, so the agent hands the whole
+// Validator and Executor expect over Intent, so the agent hands the whole
 // Registry to the loop and the loop routes to many use cases while staying
 // generic over a single intent type. Adding a use case is one more route
 // in NewBookkeepingRegistry; the agent and the loop need no change.
@@ -40,13 +40,13 @@ func NewBookkeepingRegistry(repo accounting.LedgerRepository, pub EventPublisher
 
 	return Registry{routes: map[IntentKind]intentRoute{
 		IntentPostJournal: {
-			validate: func(ctx context.Context, intent BookkeepingIntent) error {
+			validate: func(ctx context.Context, intent Intent) error {
 				if intent.Post == nil {
 					return missingPayloadErr(IntentPostJournal)
 				}
 				return post.Validate(ctx, *intent.Post)
 			},
-			execute: func(ctx context.Context, intent BookkeepingIntent) (accounting.JournalEntry, error) {
+			execute: func(ctx context.Context, intent Intent) (accounting.JournalEntry, error) {
 				if intent.Post == nil {
 					return accounting.JournalEntry{}, missingPayloadErr(IntentPostJournal)
 				}
@@ -54,13 +54,13 @@ func NewBookkeepingRegistry(repo accounting.LedgerRepository, pub EventPublisher
 			},
 		},
 		IntentReverseJournal: {
-			validate: func(ctx context.Context, intent BookkeepingIntent) error {
+			validate: func(ctx context.Context, intent Intent) error {
 				if intent.Reverse == nil {
 					return missingPayloadErr(IntentReverseJournal)
 				}
 				return reverse.Validate(ctx, *intent.Reverse)
 			},
-			execute: func(ctx context.Context, intent BookkeepingIntent) (accounting.JournalEntry, error) {
+			execute: func(ctx context.Context, intent Intent) (accounting.JournalEntry, error) {
 				if intent.Reverse == nil {
 					return accounting.JournalEntry{}, missingPayloadErr(IntentReverseJournal)
 				}
@@ -74,7 +74,7 @@ func NewBookkeepingRegistry(repo accounting.LedgerRepository, pub EventPublisher
 // Kind is itself a validation failure, not a panic: the harness loop feeds
 // it back to the model as correctable feedback and the model retries with
 // a known kind.
-func (r Registry) Validate(ctx context.Context, intent BookkeepingIntent) error {
+func (r Registry) Validate(ctx context.Context, intent Intent) error {
 	route, ok := r.routes[intent.Kind]
 	if !ok {
 		return r.unknownKindErr(intent.Kind)
@@ -86,7 +86,7 @@ func (r Registry) Validate(ctx context.Context, intent BookkeepingIntent) error 
 // and returns the posted entry. Both bookkeeping use cases produce a
 // JournalEntry -- a reversal is itself an entry -- so the result type is
 // uniform across the union.
-func (r Registry) Execute(ctx context.Context, intent BookkeepingIntent) (accounting.JournalEntry, error) {
+func (r Registry) Execute(ctx context.Context, intent Intent) (accounting.JournalEntry, error) {
 	route, ok := r.routes[intent.Kind]
 	if !ok {
 		return accounting.JournalEntry{}, r.unknownKindErr(intent.Kind)
@@ -107,12 +107,12 @@ func (r Registry) Kinds() []IntentKind {
 }
 
 func (r Registry) unknownKindErr(kind IntentKind) error {
-	return fmt.Errorf("usecase: unknown intent kind %q; expected one of %v", kind, r.Kinds())
+	return fmt.Errorf("bookkeeping: unknown intent kind %q; expected one of %v", kind, r.Kinds())
 }
 
-// missingPayloadErr reports a BookkeepingIntent whose Kind selects a payload the
+// missingPayloadErr reports a Intent whose Kind selects a payload the
 // model did not fill -- e.g. kind "post_journal" with no post_journal
 // object. The payload field carries the same name as the kind.
 func missingPayloadErr(kind IntentKind) error {
-	return fmt.Errorf("usecase: intent kind %q is missing its %q payload object", kind, kind)
+	return fmt.Errorf("bookkeeping: intent kind %q is missing its %q payload object", kind, kind)
 }

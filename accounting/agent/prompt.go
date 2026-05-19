@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"github.com/flarexio/stoa/accounting"
-	"github.com/flarexio/stoa/accounting/usecase"
+	"github.com/flarexio/stoa/accounting/bookkeeping"
 	"github.com/flarexio/stoa/llm"
 )
 
@@ -179,13 +179,13 @@ const (
 	intentEnvelopeShape = `{"evidence":[{"source":"...","fact":"..."}],"rationale":"...","intent":<one command intent object from the list above>}`
 )
 
-// intentsText renders the bookkeeping intent menu from usecase.Intents(),
+// intentsText renders the bookkeeping intent menu from bookkeeping.Intents(),
 // so the model's options stay in lockstep with the use cases the Registry
 // can route. Each intent gets its purpose and the exact JSON body that
 // selects it.
 func intentsText() string {
 	var b strings.Builder
-	for _, c := range usecase.Intents() {
+	for _, c := range bookkeeping.Intents() {
 		fmt.Fprintf(&b, "  - %s -- %s\n", c.Kind, c.Summary)
 		fmt.Fprintf(&b, "      intent: {\"kind\":%q,%q:%s}\n", c.Kind, c.Kind, c.ArgsShape)
 	}

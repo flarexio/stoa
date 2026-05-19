@@ -48,7 +48,7 @@ func FormatEntryID(seq uint64) string {
 }
 
 // ExpectedSequence carries the optimistic-concurrency hint a producer
-// passes to usecase.EventPublisher.Publish. Subject is the scope of
+// passes to bookkeeping.EventPublisher.Publish. Subject is the scope of
 // mutual exclusion (typically one ledger; later we may introduce
 // per-period subjects if write contention emerges); LastSeq is the
 // producer's view of the last sequence already accepted on that Subject.
