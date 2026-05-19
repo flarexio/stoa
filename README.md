@@ -151,7 +151,7 @@ bookkeeping request
 → validation errors feed back as typed events for self-correction
 ```
 
-`accounting/` owns the domain model — chart of accounts, periods, journal entries, and validation rules — with no LLM dependency. `accounting/agent/` owns the agent loop and the feature-specific prompt renderer.
+`accounting/` owns the domain model — chart of accounts, periods, journal entries, and validation rules — with no LLM dependency. `accounting/usecase/` owns the `PostJournal` operation (validate-then-publish, callable without an LLM) and the event-transport ports. `accounting/agent/` owns the agent loop and the feature-specific prompt renderer.
 
 `cmd/stoa book-run` runs this loop from the command line; see [`docs/accounting.md`](docs/accounting.md) for the runnable demo and configuration.
 
@@ -173,7 +173,7 @@ Bookkeeper sessions connect to an already-seeded ledger and never seed on startu
 
 ## Project layout
 
-Stoa organizes code **by feature**, not by architectural layer. A feature is split into a domain package and an agent package so domain models remain independently importable while the agent loop stays explicit.
+Stoa organizes code **by feature**, not by architectural layer. A feature is a domain package at its root with nested subpackages — an agent loop, and a use-case layer when an operation is worth running without an LLM — so domain models remain independently importable while the agent loop stays explicit.
 
 ```
 stoa/
@@ -183,7 +183,8 @@ stoa/
 ├── world/                 # Game domain: world state, actors, items, NPCIntent, validator
 │   └── agent/             # NPC agent loop and prompt rendering
 ├── accounting/            # Accounting domain: ledger, accounts, periods, validator, events
-│   └── agent/             # Bookkeeping agent loop, prompt rendering, event ports
+│   ├── usecase/           # PostJournal operation + event-transport ports (no LLM)
+│   └── agent/             # Bookkeeping agent loop and prompt rendering
 ├── persistence/           # LedgerRepository adapters (memory, postgres)
 ├── messaging/             # EventBus adapters (inproc, nats)
 ├── config/                # config.yaml loader for cmd/stoa
