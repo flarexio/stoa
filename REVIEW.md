@@ -42,6 +42,11 @@ checklist of things easy to miss in a PR.
   tests.
 - **Domain rule changes without tests.** New or relaxed validation rules
   that ship without both a passing and a failing test case.
+- **Comment bloat.** Multi-paragraph essays above a function, docs that
+  restate the name and signature, describing `// TestX does Y` comments
+  above a test, section dividers, or any comment that paraphrases the
+  next line instead of explaining a non-obvious "why". See AGENTS.md
+  "Code Style".
 
 ## Tone
 

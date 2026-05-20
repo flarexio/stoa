@@ -9,9 +9,8 @@ import (
 )
 
 // accountingRepository is the in-memory accounting.LedgerRepository. All
-// operations are safe for concurrent use; stored entries and their Lines are
-// cloned on the way in and out so callers cannot mutate repository state
-// through a returned value.
+// operations are safe for concurrent use; entries and their Lines are cloned
+// in and out so callers cannot mutate stored state through a returned value.
 type accountingRepository struct {
 	mu       sync.RWMutex
 	accounts map[string]accounting.Account
@@ -32,8 +31,6 @@ func NewAccountingRepository() accounting.LedgerRepository {
 		lastSeq:  make(map[string]uint64),
 	}
 }
-
-// --- point reads ---
 
 func (r *accountingRepository) Account(_ context.Context, code string) (accounting.Account, bool, error) {
 	r.mu.RLock()
@@ -65,8 +62,6 @@ func (r *accountingRepository) Entry(_ context.Context, id string) (accounting.J
 	}
 	return cloneAccountingEntry(r.entries[idx]), true, nil
 }
-
-// --- listings ---
 
 func (r *accountingRepository) Accounts(_ context.Context) ([]accounting.Account, error) {
 	r.mu.RLock()
@@ -108,8 +103,6 @@ func (r *accountingRepository) Entries(_ context.Context) ([]accounting.JournalE
 	return out, nil
 }
 
-// --- seed ---
-
 func (r *accountingRepository) PutAccount(_ context.Context, a accounting.Account) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -131,11 +124,9 @@ func (r *accountingRepository) PutBranch(_ context.Context, b accounting.Branch)
 	return nil
 }
 
-// --- apply / last sequence ---
-
-// Apply records the entry carried in evt and advances LastSequence for
-// evt.Subject, both under the same mutex so a concurrent LastSequence reader
-// cannot observe the new entry without also observing the new sequence.
+// Apply writes the entry and advances LastSequence for evt.Subject under one
+// mutex, so a concurrent LastSequence reader cannot see the entry without
+// also seeing the new sequence.
 func (r *accountingRepository) Apply(_ context.Context, evt accounting.JournalPosted) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -153,8 +144,6 @@ func (r *accountingRepository) LastSequence(_ context.Context, subject string) (
 	defer r.mu.RUnlock()
 	return r.lastSeq[subject], nil
 }
-
-// --- internal cloning ---
 
 func cloneAccountingEntry(e accounting.JournalEntry) accounting.JournalEntry {
 	out := e

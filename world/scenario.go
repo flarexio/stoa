@@ -7,17 +7,14 @@ import (
 	"os"
 )
 
-// Scenario wraps a WorldState with optional metadata used by demos and CLI
-// loaders. The metadata fields are advisory; only WorldState participates in
-// validation.
+// Scenario wraps a WorldState with optional metadata for demos and CLI loaders.
 type Scenario struct {
 	Name    string     `json:"name,omitempty"`
 	Summary string     `json:"summary,omitempty"`
 	State   WorldState `json:"-"`
 }
 
-// scenarioFile is the on-disk shape: the world fields are inline alongside the
-// optional metadata, so existing fixtures remain valid as raw WorldState JSON.
+// scenarioFile inlines the world fields so raw WorldState JSON still decodes.
 type scenarioFile struct {
 	Name      string                  `json:"name,omitempty"`
 	Summary   string                  `json:"summary,omitempty"`

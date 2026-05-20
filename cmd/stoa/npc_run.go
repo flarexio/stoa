@@ -14,7 +14,6 @@ import (
 	"github.com/flarexio/stoa/world/agent"
 )
 
-// runOutput is the machine-readable JSON document the CLI prints on success.
 type runOutput struct {
 	Scenario    string           `json:"scenario,omitempty"`
 	Summary     string           `json:"summary,omitempty"`

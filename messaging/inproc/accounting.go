@@ -8,15 +8,11 @@ import (
 	"github.com/flarexio/stoa/accounting/bookkeeping"
 )
 
-// accountingBus is an in-process bookkeeping.EventBus. It dispatches every
-// published event synchronously to all subscribed handlers under a single
-// mutex, so Publish returns only after every handler has finished -- handy for
-// tests that assert projection state immediately after Publish.
-//
+// accountingBus is the in-process bookkeeping.EventBus. It dispatches every
+// published event synchronously to all subscribed handlers under one mutex.
 // Optimistic concurrency mirrors NATS JetStream's
-// Nats-Expected-Last-Subject-Sequence: a producer whose ExpectedSequence.LastSeq
-// does not match the bus's view is rejected with accounting.ErrConcurrentUpdate
-// before any handler runs.
+// Nats-Expected-Last-Subject-Sequence: a stale ExpectedSequence.LastSeq is
+// rejected with accounting.ErrConcurrentUpdate before any handler runs.
 type accountingBus struct {
 	mu        sync.Mutex
 	streamSeq uint64
@@ -24,8 +20,7 @@ type accountingBus struct {
 	handlers  []bookkeeping.EventHandler
 }
 
-// NewAccountingBus returns an empty in-process bookkeeping.EventBus for
-// JournalPosted events.
+// NewAccountingBus returns an empty in-process bookkeeping.EventBus.
 func NewAccountingBus() bookkeeping.EventBus {
 	return &accountingBus{lastSubj: make(map[string]uint64)}
 }
@@ -44,9 +39,6 @@ func (b *accountingBus) Close() error {
 	return nil
 }
 
-// Publish assigns the next broker sequence under the bus's mutex (so the
-// optimistic-concurrency check and the assignment are atomic), stamps Subject
-// and Sequence onto the event, and dispatches it to every subscribed handler.
 func (b *accountingBus) Publish(ctx context.Context, evt accounting.JournalPosted, expect accounting.ExpectedSequence) (accounting.JournalPosted, error) {
 	b.mu.Lock()
 	if expect.Subject != "" {

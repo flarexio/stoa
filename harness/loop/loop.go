@@ -1,3 +1,5 @@
+// Package loop is the generic reason -> validate -> execute harness loop that
+// drives a feature's domain through an llm.ReasoningEngine.
 package loop
 
 import (
@@ -43,16 +45,17 @@ func (f ExecutorFunc[TIntent]) Execute(ctx context.Context, intent TIntent) (llm
 
 // ToolHandler answers one tool call: it decodes args (the raw JSON the model
 // supplied) into its own typed parameters and returns a result string for the
-// model's next turn. The loop only routes a call to its handler by name.
+// model's next turn.
 type ToolHandler func(ctx context.Context, args json.RawMessage) (string, error)
 
 // EventSink receives per-turn cycle events as they happen, so a caller can
-// observe the reason -> validate -> execute cycle incrementally (e.g. a TUI).
-// When Sink is nil, Run stays a plain blocking call.
+// observe the loop incrementally (e.g. a TUI). When Sink is nil, Run is a
+// plain blocking call.
 type EventSink interface {
 	Emit(ctx context.Context, event llm.CycleEvent) error
 }
 
+// Runner is the harness loop for one feature's typed Intent.
 type Runner[TIntent any] struct {
 	Engine              llm.ReasoningEngine[TIntent]
 	Validator           Validator[TIntent]
@@ -64,8 +67,10 @@ type Runner[TIntent any] struct {
 	Sink                EventSink
 }
 
+// FeedbackFormatter formats a validation/execution error into prompt feedback.
 type FeedbackFormatter func(error) string
 
+// Result is the outcome of one Run.
 type Result[TIntent any] struct {
 	Reasoning   llm.ReasoningResult[TIntent]
 	Observation llm.Observation
@@ -170,9 +175,8 @@ func (r Runner[TIntent]) emit(ctx context.Context, event llm.CycleEvent) error {
 	return r.Sink.Emit(ctx, event)
 }
 
-// runTool routes one tool call to its handler and wraps the outcome as a
-// tool-result event. An unknown tool name or a handler error becomes feedback
-// the model can recover from; it never aborts the loop.
+// runTool routes one tool call to its handler. An unknown name or handler
+// error becomes feedback the model can recover from; it never aborts the loop.
 func (r Runner[TIntent]) runTool(ctx context.Context, call llm.ToolCall) llm.CycleEvent {
 	handler, ok := r.Tools[call.Name]
 	if !ok {
@@ -228,9 +232,8 @@ func modelOutputEvent[TIntent any](reasoning llm.ReasoningResult[TIntent]) llm.C
 	}
 }
 
-// formatIntent renders a proposed intent for a model_output event. JSON keeps
-// the rendering deterministic -- a %#v of a union with pointers would expose
-// non-deterministic addresses. It falls back to %#v only on a marshal error.
+// JSON keeps formatIntent deterministic; %#v on a union with pointers would
+// expose non-deterministic addresses.
 func formatIntent[TIntent any](intent TIntent) string {
 	if b, err := json.Marshal(intent); err == nil {
 		return string(b)

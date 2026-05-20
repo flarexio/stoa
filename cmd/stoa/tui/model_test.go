@@ -11,8 +11,7 @@ import (
 	"github.com/flarexio/stoa/llm"
 )
 
-// fakeSession is a tui.Session test double. Run emits the configured
-// cycle events through the sink, then returns the configured outcome.
+// fakeSession emits configured events, then returns the configured outcome.
 type fakeSession struct {
 	events  []llm.CycleEvent
 	outcome Outcome
@@ -34,7 +33,7 @@ func (s *fakeSession) Close() error {
 	return nil
 }
 
-// blockingSession blocks inside Run until its turn context is cancelled.
+// blockingSession blocks until ctx is cancelled.
 type blockingSession struct{}
 
 func (blockingSession) Run(ctx context.Context, _ string, _ loop.EventSink) (Outcome, error) {
@@ -53,8 +52,7 @@ func newTestModel(session Session) model {
 	return next.(model)
 }
 
-// chatModel drives the start screen through option selection so the
-// returned model is in stateChat with session attached.
+// chatModel selects the option so the returned model is in stateChat.
 func chatModel(t *testing.T, session Session) model {
 	t.Helper()
 	m := newTestModel(session)
@@ -71,7 +69,6 @@ func chatModel(t *testing.T, session Session) model {
 	return next.(model)
 }
 
-// driveTurn pumps the streaming turn loop to completion.
 func driveTurn(t *testing.T, m model) model {
 	t.Helper()
 	for i := 0; i < 100 && m.running; i++ {
@@ -133,7 +130,7 @@ func TestModelRunTurnStreamsEvents(t *testing.T) {
 		t.Fatal("model should be idle after the turn finishes")
 	}
 
-	// user request + 3 cycle events + system summary line.
+	// user request + 3 cycle events + system summary
 	wantKinds := []lineKind{lineUser, lineModel, lineValidation, lineObservation, lineSystem}
 	if len(m.lines) != len(wantKinds) {
 		t.Fatalf("transcript has %d lines, want %d", len(m.lines), len(wantKinds))
@@ -219,14 +216,11 @@ func TestModelRendersModelOutputAsMarkdown(t *testing.T) {
 	}
 	width := max(m.viewport.Width()-2, 20)
 
-	// Model output is Markdown-rendered: Glamour consumes inline-code
-	// backticks.
+	// lineModel is Markdown-rendered: Glamour consumes inline-code backticks.
 	got := m.renderBody(line{kind: lineModel, text: "run `go test`"}, width)
 	if strings.Contains(got, "`") {
 		t.Errorf("model output should be Markdown-rendered, backticks remain: %q", got)
 	}
-
-	// Every other line kind stays literal.
 	plain := m.renderBody(line{kind: lineSystem, text: "run `go test`"}, width)
 	if !strings.Contains(plain, "`") {
 		t.Errorf("non-model line should stay literal, got %q", plain)

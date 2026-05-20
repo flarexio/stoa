@@ -10,7 +10,7 @@ var (
 	footerStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("241"))
 	headerStyle   = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("63"))
 
-	// transcript line labels, keyed by lineKind.
+	// transcript line labels, keyed by lineKind
 	userStyle        = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("39"))
 	modelStyle       = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("252"))
 	validationStyle  = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("214"))

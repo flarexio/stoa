@@ -7,15 +7,15 @@ import (
 	"time"
 )
 
-// Validator enforces the accounting invariants on a proposed JournalIntent. It
-// reads from a LedgerRepository and never mutates it.
+// Validator enforces the accounting invariants on a proposed JournalIntent.
+// It reads from a LedgerRepository and never mutates it.
 type Validator struct {
 	Repo LedgerRepository
 }
 
-// Validate returns nil if intent satisfies every accounting invariant, or a
-// joined error describing every domain violation so the agent can fix them in
-// one cycle. Infrastructure errors from Repo are returned immediately, not joined.
+// Validate returns nil if intent satisfies every invariant, or a joined error
+// describing every domain violation so the agent can fix them in one cycle.
+// Infrastructure errors from Repo are returned immediately, not joined.
 func (v Validator) Validate(ctx context.Context, intent JournalIntent) error {
 	if v.Repo == nil {
 		return errors.New("accounting: validator has no repository")

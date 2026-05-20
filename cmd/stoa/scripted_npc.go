@@ -45,9 +45,7 @@ func (e *scriptedEngine) Predict(_ context.Context, input llm.ReasoningInput) (l
 	}, nil
 }
 
-// firstAttempt proposes an intent the validator will reject, so the demo can
-// exercise the feedback loop. Giving a non-existent item fails for any role
-// the engine is asked to drive.
+// firstAttempt proposes an intent the validator will reject, exercising the feedback loop.
 func (e *scriptedEngine) firstAttempt() (world.NPCIntent, string) {
 	target := e.firstOtherActorInLocation()
 	return world.NPCIntent{
@@ -62,7 +60,6 @@ func (e *scriptedEngine) firstAttempt() (world.NPCIntent, string) {
 		"first attempt: try to give a magical item without checking inventory"
 }
 
-// recover proposes a valid intent based on the actor's role and surroundings.
 func (e *scriptedEngine) recover() (world.NPCIntent, string) {
 	actor, ok := e.world.Actors[e.actorID]
 	if !ok {
@@ -94,7 +91,6 @@ func (e *scriptedEngine) firstOtherActorInLocation() string {
 	if !ok {
 		return ""
 	}
-	// Iterate in a stable order so output is deterministic across runs.
 	for _, id := range sortedActorIDs(e.world.Actors) {
 		if id == e.actorID {
 			continue

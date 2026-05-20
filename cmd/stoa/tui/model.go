@@ -16,7 +16,6 @@ import (
 	"github.com/flarexio/stoa/llm"
 )
 
-// viewState is the screen the model is currently showing.
 type viewState int
 
 const (
@@ -24,7 +23,6 @@ const (
 	stateChat                    // conversing with a chosen session
 )
 
-// lineKind classifies one transcript entry for styling.
 type lineKind int
 
 const (
@@ -38,14 +36,11 @@ const (
 	lineTool
 )
 
-// line is one rendered entry in the chat transcript.
 type line struct {
 	kind lineKind
 	text string
 }
 
-// sessionReadyMsg is delivered after an Option.Start finishes composing
-// (or failing to compose) a session.
 type sessionReadyMsg struct {
 	label   string
 	session Session
@@ -216,8 +211,7 @@ func (m model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// startSession composes the chosen option's session off the update loop,
-// since Start may load scenarios and open repositories.
+// startSession composes the session off the update loop; Start may do I/O.
 func (m model) startSession(opt Option) tea.Cmd {
 	ctx := m.ctx
 	return func() tea.Msg {
@@ -226,8 +220,7 @@ func (m model) startSession(opt Option) tea.Cmd {
 	}
 }
 
-// startTurn runs one user request against the session. The agent runs in
-// a goroutine; its cycle events stream back through chanSink.
+// startTurn runs the agent in a goroutine; cycle events stream back through chanSink.
 func (m model) startTurn(request string) (tea.Model, tea.Cmd) {
 	m.turn++
 	m.appendLine(line{kind: lineUser, text: request})
@@ -297,9 +290,8 @@ func (m *model) layout() {
 	m.viewport.GotoBottom()
 }
 
-// ensureMarkdown (re)builds the Glamour renderer whenever the transcript
-// wrap width changes. A build failure leaves md nil; renderBody then falls
-// back to plain text.
+// ensureMarkdown rebuilds the Glamour renderer when wrap width changes;
+// a build failure leaves md nil and renderBody falls back to plain text.
 func (m *model) ensureMarkdown() {
 	width := max(m.viewport.Width()-2, 20)
 	if m.md != nil && width == m.mdWidth {
@@ -372,8 +364,7 @@ func (m model) renderTranscript() string {
 	return b.String()
 }
 
-// renderBody renders one transcript line's text: model output as Markdown
-// through Glamour, every other kind as width-constrained plain text.
+// renderBody renders lineModel through Glamour Markdown; other kinds stay literal.
 func (m model) renderBody(l line, width int) string {
 	if l.kind == lineModel && m.md != nil {
 		if out, err := m.md.Render(l.text); err == nil {
@@ -396,7 +387,6 @@ func (m model) View() tea.View {
 	default:
 		content = m.chatView()
 	}
-	// v2 controls the alternate screen through the returned View.
 	v := tea.NewView(content)
 	v.AltScreen = true
 	return v

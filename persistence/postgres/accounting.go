@@ -22,8 +22,7 @@ type accountingRepository struct {
 }
 
 // NewAccountingRepository opens a pgxpool.Pool from dsn and returns the
-// accounting.LedgerRepository it backs, plus an io.Closer the caller defers to
-// release the pool.
+// accounting.LedgerRepository it backs, plus an io.Closer the caller defers.
 func NewAccountingRepository(ctx context.Context, dsn string) (accounting.LedgerRepository, io.Closer, error) {
 	pool, closer, err := connectPool(ctx, dsn)
 	if err != nil {
@@ -31,8 +30,6 @@ func NewAccountingRepository(ctx context.Context, dsn string) (accounting.Ledger
 	}
 	return &accountingRepository{pool: pool, q: pgstore.New(pool)}, closer, nil
 }
-
-// --- point reads ---
 
 func (r *accountingRepository) Account(ctx context.Context, code string) (accounting.Account, bool, error) {
 	row, err := r.q.GetAccount(ctx, code)
@@ -86,8 +83,6 @@ func (r *accountingRepository) Entry(ctx context.Context, id string) (accounting
 	}
 	return entry, true, nil
 }
-
-// --- listings ---
 
 func (r *accountingRepository) Accounts(ctx context.Context) ([]accounting.Account, error) {
 	rows, err := r.q.ListAccounts(ctx)
@@ -159,8 +154,6 @@ func (r *accountingRepository) Entries(ctx context.Context) ([]accounting.Journa
 	return out, nil
 }
 
-// --- seed ---
-
 func (r *accountingRepository) PutAccount(ctx context.Context, a accounting.Account) error {
 	if err := r.q.UpsertAccount(ctx, pgstore.UpsertAccountParams{
 		Code:   a.Code,
@@ -196,8 +189,8 @@ func (r *accountingRepository) PutBranch(ctx context.Context, b accounting.Branc
 }
 
 // Apply writes the entry, its lines, and the new last-sequence record in one
-// transaction, so a concurrent LastSequence reader cannot see the entry without
-// also seeing the new sequence.
+// transaction, so a concurrent LastSequence reader cannot see the entry
+// without also seeing the new sequence.
 func (r *accountingRepository) Apply(ctx context.Context, evt accounting.JournalPosted) error {
 	tx, err := r.pool.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
@@ -255,8 +248,6 @@ func (r *accountingRepository) Apply(ctx context.Context, evt accounting.Journal
 	return nil
 }
 
-// LastSequence returns the broker sequence of the most recent applied
-// JournalPosted on subject, or 0 when no event has been seen yet.
 func (r *accountingRepository) LastSequence(ctx context.Context, subject string) (uint64, error) {
 	seq, err := r.q.GetLastSequence(ctx, subject)
 	if err != nil {
@@ -270,8 +261,6 @@ func (r *accountingRepository) LastSequence(ctx context.Context, subject string)
 	}
 	return uint64(seq), nil
 }
-
-// --- mappers ---
 
 func accountFromRow(row pgstore.Account) accounting.Account {
 	return accounting.Account{

@@ -7,7 +7,6 @@ import (
 	"github.com/flarexio/stoa/accounting"
 )
 
-// accountSlice is a minimal accounting.AccountLister for FindAccounts tests.
 type accountSlice []accounting.Account
 
 func (s accountSlice) Accounts(context.Context) ([]accounting.Account, error) {

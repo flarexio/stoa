@@ -1,8 +1,5 @@
-// Package agent runs the game NPC agent for Stoa's harness.
-// It wires world.NPCIntent through harness/loop.Runner: the LLM proposes an
-// NPCIntent, world.Validator enforces hard game rules, and the executor
-// observes world state only after validation passes. Provider-specific code
-// stays outside this package; wire it through llm.ReasoningEngine.
+// Package agent runs the NPC agent: the LLM proposes a world.NPCIntent and
+// world.Validator enforces hard game rules through harness/loop.
 package agent
 
 import (
@@ -14,7 +11,7 @@ import (
 	"github.com/flarexio/stoa/world"
 )
 
-// NPC orchestrates one NPC decision turn: reason → validate → execute.
+// NPC orchestrates one NPC decision turn: reason -> validate -> execute.
 type NPC struct {
 	Engine   llm.ReasoningEngine[world.NPCIntent]
 	MaxTurns int
@@ -29,8 +26,8 @@ type Result struct {
 	Events      []llm.CycleEvent
 }
 
-// Act runs one NPC reasoning cycle for actorID in world w.
-// task describes the in-world situation the NPC should respond to.
+// Act runs one reasoning cycle for actorID in world w; task describes the
+// in-world situation the NPC should respond to.
 func (a NPC) Act(ctx context.Context, actorID string, w world.WorldState, task string) (Result, error) {
 	if a.Engine == nil {
 		return Result{}, fmt.Errorf("npc: agent has no reasoning engine")

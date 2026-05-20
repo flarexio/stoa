@@ -10,9 +10,7 @@ import (
 	"github.com/flarexio/stoa/persistence/memory"
 )
 
-// awsBillRepo seeds an in-memory LedgerRepository from the testdata
-// fixture: April 2026 is closed, May 2026 is open, one expense account
-// is inactive so the inactive-account rule has something to bite on.
+// awsBillRepo: April 2026 closed, May 2026 open, account 5900 inactive.
 func awsBillRepo(t *testing.T) accounting.LedgerRepository {
 	t.Helper()
 	scenario, err := accounting.LoadScenarioFile("../testdata/accounting/aws_bill.json")
@@ -26,9 +24,6 @@ func awsBillRepo(t *testing.T) accounting.LedgerRepository {
 	return repo
 }
 
-// balancedAWSIntent is the canonical AWS-bill journal: $100 to cloud
-// hosting expense (debit), $100 to credit card payable (credit), in the
-// open period.
 func balancedAWSIntent() accounting.JournalIntent {
 	return accounting.JournalIntent{
 		Date:        time.Date(2026, 5, 12, 0, 0, 0, 0, time.UTC),

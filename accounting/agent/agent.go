@@ -1,8 +1,6 @@
-// Package agent runs the bookkeeping agent: it wires the accounting use cases
-// through the harness loop, where the LLM proposes a typed intent and the
-// bookkeeping Registry validates, routes, and executes it. Both use cases reach
-// the ledger by publishing a JournalPosted through an EventPublisher, never by
-// writing the repository directly.
+// Package agent wires the bookkeeping use cases through the harness loop: the
+// LLM proposes a typed Intent and the bookkeeping Registry validates, routes,
+// and executes it.
 package agent
 
 import (
@@ -16,9 +14,7 @@ import (
 	"github.com/flarexio/stoa/llm"
 )
 
-// Bookkeeper runs one bookkeeping decision: a natural-language request is
-// turned into a typed intent, routed by the Registry to the matching use case,
-// validated, and executed.
+// Bookkeeper runs one bookkeeping decision: reason -> validate -> execute.
 type Bookkeeper struct {
 	Engine    llm.ReasoningEngine[bookkeeping.Intent]
 	Repo      accounting.LedgerRepository
@@ -38,8 +34,7 @@ type Result struct {
 	Events      []llm.CycleEvent
 }
 
-// Book runs the reason -> validate -> execute loop for request, routing
-// whichever intent the model proposes through the Registry.
+// Book runs the loop for request, routing whichever Intent the model proposes through the Registry.
 func (a Bookkeeper) Book(ctx context.Context, request string) (Result, error) {
 	if a.Engine == nil {
 		return Result{}, errors.New("bookkeeper: agent has no reasoning engine")
@@ -53,8 +48,6 @@ func (a Bookkeeper) Book(ctx context.Context, request string) (Result, error) {
 
 	registry := bookkeeping.NewBookkeepingRegistry(a.Repo, a.Publisher, a.Clock, a.Subject)
 
-	// The registry owns validate + execute; the agent only adapts the posted
-	// entry into the llm.Observation the harness loop feeds back to the model.
 	var posted accounting.JournalEntry
 	executor := loop.ExecutorFunc[bookkeeping.Intent](func(ctx context.Context, intent bookkeeping.Intent) (llm.Observation, error) {
 		entry, err := registry.Execute(ctx, intent)

@@ -9,8 +9,6 @@ import (
 	"github.com/flarexio/stoa/accounting/bookkeeping"
 )
 
-// postOne posts balancedIntent through PostJournal and returns the entry,
-// the starting point for the reversal tests.
 func postOne(t *testing.T, repo accounting.LedgerRepository, bus bookkeeping.EventBus) accounting.JournalEntry {
 	t.Helper()
 	uc := bookkeeping.PostJournal{Repo: repo, Publisher: bus, Clock: fixedClock}
@@ -21,9 +19,6 @@ func postOne(t *testing.T, repo accounting.LedgerRepository, bus bookkeeping.Eve
 	return entry
 }
 
-// TestReverseJournal_HandleReversesPostedEntry posts an entry, reverses it,
-// and checks the reversal is a mirror image: same accounts, debit and
-// credit swapped on every line.
 func TestReverseJournal_HandleReversesPostedEntry(t *testing.T) {
 	ctx := context.Background()
 	repo, bus := seededLedger(t)
@@ -66,8 +61,6 @@ func TestReverseJournal_HandleReversesPostedEntry(t *testing.T) {
 	}
 }
 
-// TestReverseJournal_RejectsUnknownEntry shows Validate fails before any
-// side effect when the entry_id names no posted entry.
 func TestReverseJournal_RejectsUnknownEntry(t *testing.T) {
 	ctx := context.Background()
 	repo, bus := seededLedger(t)
@@ -85,8 +78,6 @@ func TestReverseJournal_RejectsUnknownEntry(t *testing.T) {
 	}
 }
 
-// TestReverseJournal_RejectsMissingEntryID shows an empty entry_id is
-// rejected rather than treated as a lookup for the zero ID.
 func TestReverseJournal_RejectsMissingEntryID(t *testing.T) {
 	repo, bus := seededLedger(t)
 

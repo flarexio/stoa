@@ -15,8 +15,6 @@ import (
 	"github.com/flarexio/stoa/llm"
 )
 
-// bookRunOutput is the machine-readable JSON document the CLI prints on
-// success.
 type bookRunOutput struct {
 	Scenario    string                  `json:"scenario,omitempty"`
 	Description string                  `json:"description,omitempty"`
@@ -100,8 +98,7 @@ func runBook(ctx context.Context, c *cli.Command, stdout io.Writer) error {
 		return err
 	}
 
-	// config.yaml supplies the reasoning-engine defaults; a non-empty
-	// --engine / --model flag overrides its block.
+	// --engine / --model override the config.yaml llm block.
 	if engineKind == "" {
 		engineKind = string(cfg.LLM.Engine)
 	}

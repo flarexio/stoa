@@ -1,13 +1,6 @@
-// Package memory provides in-memory repository adapters. It is intended
-// for tests, single-process development runs, and the local read-model
-// embedded in a producer that needs fresh state to validate intents
-// against. State is held in process memory; nothing is durable across
-// restarts. For production projection storage, use persistence/postgres.
+// Package memory provides in-memory repository adapters for tests and
+// single-process development. State lives in process memory and is not durable
+// across restarts; for production projection storage use persistence/postgres.
 //
-// One file per domain: domain-specific repository code (struct,
-// constructor, port implementation) lives in <domain>.go (e.g.
-// accounting.go). When a second domain needs an in-memory adapter, it
-// adds a sibling file rather than extending an existing struct -- the
-// in-memory implementation is small enough that sharing a generic core
-// would cost more than it saves.
+// One file per domain (e.g. accounting.go).
 package memory

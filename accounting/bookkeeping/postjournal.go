@@ -1,8 +1,6 @@
 // Package bookkeeping holds the bookkeeping use cases: application-layer
-// operations that validate and execute a typed intent against the accounting
-// domain. A use case carries no LLM dependency -- the agent drives it through
-// the harness loop, but a REST handler, batch job, or test can call Handle
-// directly.
+// operations that validate and execute a typed Intent against the accounting
+// domain. A use case carries no LLM dependency.
 package bookkeeping
 
 import (
@@ -14,19 +12,13 @@ import (
 	"github.com/flarexio/stoa/accounting"
 )
 
-// SubjectLedger is the default subject JournalPosted events are published on
-// for optimistic-concurrency scoping. Override it via PostJournal.Subject when
-// multiple ledgers share a transport.
+// SubjectLedger is the default Subject JournalPosted events are published on.
 const SubjectLedger = "accounting.journal"
 
-// Clock returns the time a posted entry is stamped with; tests inject a
-// deterministic clock.
+// Clock returns the time a posted entry is stamped with; tests inject a fake.
 type Clock func() time.Time
 
-// PostJournal is the "post a journal entry" use case: it validates a
-// JournalIntent against the ledger and, on success, publishes it as a
-// JournalPosted event. The agent drives Validate and Execute as the two
-// harness-loop steps; a non-LLM caller posts in one call through Handle.
+// PostJournal is the "post a journal entry" use case.
 type PostJournal struct {
 	Repo      accounting.LedgerRepository
 	Publisher EventPublisher
@@ -34,14 +26,13 @@ type PostJournal struct {
 	Subject   string
 }
 
-// Validate reports whether intent satisfies every accounting invariant. It
-// runs no side effect.
+// Validate runs no side effect; it reports whether intent satisfies every accounting invariant.
 func (uc PostJournal) Validate(ctx context.Context, intent accounting.JournalIntent) error {
 	return accounting.Validator{Repo: uc.Repo}.Validate(ctx, intent)
 }
 
-// Execute publishes an already-validated intent and returns the posted entry.
-// It does not re-validate -- an unvalidated caller must use Handle.
+// Execute publishes an already-validated intent. It does not re-validate;
+// unvalidated callers must use Handle.
 func (uc PostJournal) Execute(ctx context.Context, intent accounting.JournalIntent) (accounting.JournalEntry, error) {
 	if uc.Repo == nil {
 		return accounting.JournalEntry{}, errors.New("bookkeeping: post journal has no repository")
@@ -59,12 +50,8 @@ func (uc PostJournal) Execute(ctx context.Context, intent accounting.JournalInte
 		clock = func() time.Time { return time.Now().UTC() }
 	}
 
-	// lastSeq is both the broker's optimistic-concurrency expectation and the
-	// dense counter for the entry ID: Apply writes the entry and bumps the
-	// subject offset in one transaction, so lastSeq+1 is the sequence a
-	// successful publish assigns. On a lost race the broker returns
-	// ErrConcurrentUpdate and the caller retries with a fresh lastSeq, so no
-	// duplicate entry can take this ID.
+	// lastSeq+1 is both the optimistic-concurrency hint and the new entry's ID:
+	// Apply writes the entry and bumps the subject offset in one transaction.
 	lastSeq, err := uc.Repo.LastSequence(ctx, subject)
 	if err != nil {
 		return accounting.JournalEntry{}, fmt.Errorf("bookkeeping: read last sequence: %w", err)
@@ -90,7 +77,7 @@ func (uc PostJournal) Execute(ctx context.Context, intent accounting.JournalInte
 	return dispatched.Entry, nil
 }
 
-// Handle validates intent and, if clean, executes it in a single call.
+// Handle validates intent and, if clean, executes it.
 func (uc PostJournal) Handle(ctx context.Context, intent accounting.JournalIntent) (accounting.JournalEntry, error) {
 	if err := uc.Validate(ctx, intent); err != nil {
 		return accounting.JournalEntry{}, err

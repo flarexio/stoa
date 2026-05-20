@@ -11,10 +11,6 @@ import (
 	"github.com/flarexio/stoa/persistence/memory"
 )
 
-// ledgerScenario is a minimal in-code fixture: two accounts and one open
-// period, enough to post a single balanced entry. It is built in Go
-// rather than loaded from testdata so the use-case test states its own
-// preconditions and carries no dependency on a fixture file's layout.
 func ledgerScenario() accounting.Scenario {
 	return accounting.Scenario{
 		Company: accounting.Company{ID: "acme", Name: "Acme Co."},
@@ -33,10 +29,7 @@ func ledgerScenario() accounting.Scenario {
 	}
 }
 
-// seededLedger returns a memory repository seeded with ledgerScenario and
-// an inproc bus whose published events are applied back into that
-// repository's projection -- the same publish -> handler -> Apply path the
-// CLI wires, with no LLM and no agent in the picture.
+// seededLedger wires the same publish -> handler -> Apply path the CLI uses.
 func seededLedger(t *testing.T) (accounting.LedgerRepository, bookkeeping.EventBus) {
 	t.Helper()
 	repo := memory.NewAccountingRepository()
@@ -70,10 +63,6 @@ func fixedClock() time.Time {
 	return time.Date(2026, 5, 12, 9, 0, 0, 0, time.UTC)
 }
 
-// TestPostJournal_HandlePostsWithoutLLM is the point of the use-case
-// layer: a caller with no reasoning engine -- here the test itself, but
-// equally a REST handler or a batch job -- posts a journal entry in one
-// Handle call and the entry lands in the projection.
 func TestPostJournal_HandlePostsWithoutLLM(t *testing.T) {
 	ctx := context.Background()
 	repo, bus := seededLedger(t)
@@ -99,15 +88,12 @@ func TestPostJournal_HandlePostsWithoutLLM(t *testing.T) {
 	}
 }
 
-// TestPostJournal_HandleRejectsInvalidIntent shows Handle runs Validate
-// first: an unbalanced intent is rejected and nothing reaches the
-// projection.
 func TestPostJournal_HandleRejectsInvalidIntent(t *testing.T) {
 	ctx := context.Background()
 	repo, bus := seededLedger(t)
 
 	intent := balancedIntent()
-	intent.Lines[1].Amount = 9000 // credit no longer equals debit
+	intent.Lines[1].Amount = 9000
 
 	uc := bookkeeping.PostJournal{Repo: repo, Publisher: bus, Clock: fixedClock}
 	if _, err := uc.Handle(ctx, intent); err == nil {
@@ -123,10 +109,6 @@ func TestPostJournal_HandleRejectsInvalidIntent(t *testing.T) {
 	}
 }
 
-// TestPostJournal_ValidateAndExecuteAreSeparable exercises the two-step
-// path the harness loop drives: Validate is a side-effect-free check, and
-// Execute posts an already-validated intent. Calling them in sequence
-// must match what Handle does in one call.
 func TestPostJournal_ValidateAndExecuteAreSeparable(t *testing.T) {
 	ctx := context.Background()
 	repo, bus := seededLedger(t)
@@ -137,7 +119,6 @@ func TestPostJournal_ValidateAndExecuteAreSeparable(t *testing.T) {
 	if err := uc.Validate(ctx, intent); err != nil {
 		t.Fatalf("validate: %v", err)
 	}
-	// Validate ran no side effect: the projection is still empty.
 	if stored, _ := repo.Entries(ctx); len(stored) != 0 {
 		t.Fatalf("expected Validate to post nothing, got %d entries", len(stored))
 	}

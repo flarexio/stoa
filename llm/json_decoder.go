@@ -6,8 +6,8 @@ import (
 	"strings"
 )
 
-// JSONDecoder decodes a JSON-encoded ReasoningResult.
-// It is provider-neutral and can be reused by any adapter.
+// JSONDecoder decodes a JSON-encoded ReasoningResult. It is provider-neutral
+// and can be reused by any adapter.
 type JSONDecoder[TIntent any] struct{}
 
 func (JSONDecoder[TIntent]) Decode(content string) (ReasoningResult[TIntent], error) {

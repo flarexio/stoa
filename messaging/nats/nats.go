@@ -1,11 +1,9 @@
 // Package nats provides NATS JetStream backed message-bus adapters: the
 // production counterpart of messaging/inproc, with the same EventBus contract
-// and optimistic-concurrency semantics (Nats-Expected-Last-Subject-Sequence),
-// but with the broker -- not a process mutex -- holding the canonical stream.
+// and optimistic-concurrency semantics (Nats-Expected-Last-Subject-Sequence).
 //
-// One file per domain (e.g. accounting.go) holds the domain encoding, port
-// adaptation, and NewXxxBus factory; this file holds the connection, stream,
-// consumer, and drain plumbing shared across domains.
+// One file per domain (e.g. accounting.go); this file holds the connection,
+// stream, consumer, and drain plumbing shared across domains.
 package nats
 
 import (
@@ -19,17 +17,14 @@ import (
 	"github.com/nats-io/nats.go/jetstream"
 )
 
-// defaultAckWait mirrors JetStream's own default and bounds per-message handler
-// contexts, so a slow handler is canceled around when JetStream redelivers.
+// defaultAckWait mirrors JetStream's own default.
 const defaultAckWait = 30 * time.Second
 
-// Config carries the connection and JetStream settings the bus needs. URL,
-// Stream, Subject, and Consumer are required; AckWait defaults to 30s when zero.
-//
-// Subject is the concrete subject the bus publishes to and the consumer filters
-// on. StreamSubject is the subject pattern the stream is bound to -- a wildcard
-// like "accounting.>" lets the stream capture future subjects without
-// reconfiguration; it defaults to Subject when empty.
+// Config carries the connection and JetStream settings. URL, Stream, Subject,
+// and Consumer are required; AckWait defaults to 30s when zero. Subject is the
+// concrete subject the bus publishes to and the consumer filters on;
+// StreamSubject is the pattern the stream is bound to (e.g. "accounting.>")
+// and defaults to Subject when empty.
 type Config struct {
 	URL           string
 	Stream        string
@@ -39,9 +34,8 @@ type Config struct {
 	AckWait       time.Duration
 }
 
-// bus owns the NATS connection, the JetStream context, the durable consumer,
-// and the consume loop. It exposes raw publish/subscribe primitives to
-// same-package domain factories, which add encoding and port adaptation.
+// bus owns the NATS connection, JetStream context, consumer, and consume loop.
+// Same-package domain factories add encoding and port adaptation on top.
 type bus struct {
 	nc       *nats.Conn
 	js       jetstream.JetStream
@@ -53,8 +47,8 @@ type bus struct {
 	consume jetstream.ConsumeContext
 }
 
-// connect opens a NATS connection, attaches a JetStream context, and ensures
-// the stream and durable consumer named in cfg exist before returning.
+// connect opens NATS, attaches JetStream, and ensures the stream and durable
+// consumer named in cfg exist before returning.
 func connect(ctx context.Context, cfg Config) (*bus, error) {
 	if cfg.URL == "" || cfg.Stream == "" || cfg.Subject == "" || cfg.Consumer == "" {
 		return nil, errors.New("nats: url, stream, subject, and consumer are required")
@@ -105,9 +99,8 @@ func connect(ctx context.Context, cfg Config) (*bus, error) {
 	}, nil
 }
 
-// publishRaw publishes a wire-format body to the configured subject and returns
-// the broker-assigned stream sequence. opts carries transport options such as
-// WithExpectLastSequencePerSubject for optimistic concurrency.
+// publishRaw publishes body to the configured subject and returns the
+// broker-assigned stream sequence.
 func (b *bus) publishRaw(ctx context.Context, body []byte, opts ...jetstream.PublishOpt) (uint64, error) {
 	ack, err := b.js.Publish(ctx, b.subject, body, opts...)
 	if err != nil {
@@ -117,8 +110,7 @@ func (b *bus) publishRaw(ctx context.Context, body []byte, opts ...jetstream.Pub
 }
 
 // subscribeMessages starts the consume loop. handler receives raw JetStream
-// messages and is responsible for Ack/Nak. Subscribing twice on the same bus
-// returns an error; tear it down via close before re-subscribing.
+// messages and is responsible for Ack/Nak. Subscribing twice returns an error.
 func (b *bus) subscribeMessages(handler func(msg jetstream.Msg)) error {
 	b.mu.Lock()
 	defer b.mu.Unlock()
@@ -133,10 +125,8 @@ func (b *bus) subscribeMessages(handler func(msg jetstream.Msg)) error {
 	return nil
 }
 
-// close drains the consume loop and then closes the NATS connection. The drain
-// must complete first because Ack itself publishes over NATS -- tearing the
-// connection down first would silently lose acks and leave messages stuck in
-// num_pending. Safe to call when never subscribed and safe to call repeatedly.
+// close drains the consume loop, then closes the connection. Drain must run
+// first because Ack itself publishes over NATS. Safe to call repeatedly.
 func (b *bus) close() error {
 	b.mu.Lock()
 	cc := b.consume
@@ -154,8 +144,7 @@ func (b *bus) close() error {
 }
 
 // isWrongLastSequence reports whether err is JetStream's "wrong last sequence"
-// rejection (APIError code 10071), which domain factories translate into their
-// own concurrency sentinel.
+// rejection (APIError code 10071).
 func isWrongLastSequence(err error) bool {
 	if err == nil {
 		return false

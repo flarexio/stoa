@@ -62,8 +62,7 @@ func TestLoad_UnknownEngineRejected(t *testing.T) {
 }
 
 func TestLoad_OpenAIEngineDoesNotRequireModel(t *testing.T) {
-	// The model may be supplied via the --model CLI flag instead, so
-	// config validation must not reject an openai block without one.
+	// --model may supply it later; config validation must not reject openai without one.
 	path := writeConfig(t, "llm:\n  engine: openai\n")
 	cfg, err := config.Load(path)
 	if err != nil {
@@ -173,8 +172,6 @@ func TestLoad_NATSStreamSubjectWildcard(t *testing.T) {
 }
 
 func TestLoad_NATSStreamSubjectDefaultsToSubject(t *testing.T) {
-	// stream_subject omitted -> the stream binds exactly the publish
-	// subject, preserving the single-subject behaviour.
 	body := `messaging:
   kind: nats
   nats:

@@ -5,9 +5,9 @@ import (
 	"strings"
 )
 
-// DefaultPromptRenderer renders a generic Stoa reasoning prompt.
-// Feature packages should prefer their own renderers when they need domain-
-// specific constraints, examples, or output shapes.
+// DefaultPromptRenderer renders a generic Stoa reasoning prompt. Feature
+// packages should prefer their own renderers when they need domain-specific
+// constraints, examples, or output shapes.
 type DefaultPromptRenderer struct {
 	SystemPrompt string
 }
@@ -35,6 +35,7 @@ func (r DefaultPromptRenderer) Render(input ReasoningInput) ([]Message, error) {
 	return messages, nil
 }
 
+// RenderReasoningInput renders the task and instructions as a user-message body.
 func RenderReasoningInput(input ReasoningInput) string {
 	var b strings.Builder
 	b.WriteString("Task:\n")
@@ -48,6 +49,7 @@ func RenderReasoningInput(input ReasoningInput) string {
 	return b.String()
 }
 
+// RenderCycleEvent formats a CycleEvent as a tagged text block for the prompt.
 func RenderCycleEvent(event CycleEvent) string {
 	return fmt.Sprintf("[%s:%s]\n%s", event.Role, event.Kind, strings.TrimSpace(event.Content))
 }

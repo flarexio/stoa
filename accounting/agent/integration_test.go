@@ -12,10 +12,8 @@ import (
 	"github.com/flarexio/stoa/llm/openai"
 )
 
-// TestAgent_OpenAI exercises the full bookkeeping loop against the real
-// OpenAI API. It is gated by STOA_RUN_OPENAI_TESTS so that a plain
-// `go test ./...` -- even with OPENAI_API_KEY in the environment -- never
-// silently spends API tokens. Both the flag and the API key must be set.
+// TestAgent_OpenAI hits the real OpenAI API; gated by STOA_RUN_OPENAI_TESTS so
+// `go test ./...` never silently spends tokens even with OPENAI_API_KEY set.
 func TestAgent_OpenAI(t *testing.T) {
 	if os.Getenv("STOA_RUN_OPENAI_TESTS") == "" {
 		t.Skip("set STOA_RUN_OPENAI_TESTS=1 to run OpenAI integration tests")

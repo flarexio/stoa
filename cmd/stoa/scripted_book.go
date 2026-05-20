@@ -52,8 +52,6 @@ func (e *scriptedBookEngine) Predict(ctx context.Context, input llm.ReasoningInp
 	}, nil
 }
 
-// postIntent wraps a JournalIntent as a post_journal intent. The scripted
-// engine only ever posts; reverse_journal is reachable through the openai engine.
 func postIntent(intent accounting.JournalIntent) bookkeeping.Intent {
 	return bookkeeping.Intent{Kind: bookkeeping.IntentPostJournal, Post: &intent}
 }

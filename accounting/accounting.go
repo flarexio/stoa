@@ -1,18 +1,15 @@
-// Package accounting is the bookkeeping domain for Stoa: the core ledger model
-// -- company, chart of accounts, periods, branches, and journal entry value
-// types -- plus the rules a proposed JournalIntent must satisfy before posting.
+// Package accounting is the bookkeeping domain: the ledger model and the
+// rules a proposed JournalIntent must satisfy before it can be posted.
+// It depends on no LLM, harness, transport, or CLI code.
 //
-// It depends on no LLM SDK, provider adapter, harness, or CLI code, so offline
-// tools and batch validators can import it without AI infrastructure.
-//
-// A posted JournalEntry is immutable: corrections post a new reversing entry,
-// never edit the original. This is a double-entry invariant required by SOX,
-// GAAP, and IFRS, so the package exposes only one entry-affecting event,
-// JournalPosted -- there is intentionally no JournalEdited or JournalDeleted.
+// A posted JournalEntry is immutable; corrections post a new reversing entry.
+// This is a double-entry invariant required by SOX, GAAP, and IFRS, so the
+// package exposes only one entry-affecting event, JournalPosted.
 package accounting
 
 import "time"
 
+// LineSide is "debit" or "credit" on a JournalLine.
 type LineSide string
 
 const (
@@ -20,6 +17,7 @@ const (
 	SideCredit LineSide = "credit"
 )
 
+// AccountType classifies an Account on the chart of accounts.
 type AccountType string
 
 const (
@@ -30,6 +28,7 @@ const (
 	AccountExpense   AccountType = "expense"
 )
 
+// PeriodStatus is "open" or "closed"; a closed period rejects new postings.
 type PeriodStatus string
 
 const (
@@ -37,8 +36,7 @@ const (
 	PeriodClosed PeriodStatus = "closed"
 )
 
-// Company is the legal entity that owns the ledger. Branches are reporting
-// dimensions inside it, not separate companies.
+// Company is the legal entity that owns the ledger.
 type Company struct {
 	ID   string `json:"id" yaml:"id"`
 	Name string `json:"name" yaml:"name"`
@@ -53,8 +51,7 @@ type Account struct {
 	Active bool        `json:"active" yaml:"active"`
 }
 
-// Branch is a reporting dimension within the single ledger; it tags journal
-// lines and does not own its own books.
+// Branch is a reporting dimension within the single ledger.
 type Branch struct {
 	ID   string `json:"id" yaml:"id"`
 	Name string `json:"name" yaml:"name"`
@@ -68,8 +65,7 @@ type Period struct {
 	Status PeriodStatus `json:"status" yaml:"status"`
 }
 
-// Dimensions tag a journal line with reporting cuts. Tags is open-ended so
-// future dimensions (project, department, channel) need no shape change.
+// Dimensions tag a journal line with reporting cuts.
 type Dimensions struct {
 	BranchID string            `json:"branch_id,omitempty"`
 	Tags     map[string]string `json:"tags,omitempty"`
@@ -85,9 +81,7 @@ type JournalLine struct {
 	Dimensions  Dimensions `json:"dimensions"`
 }
 
-// JournalIntent is the typed output of the bookkeeping agent for one
-// transaction. It must clear the accounting Validator before it can be posted.
-// Description is optional audit metadata and may be empty.
+// JournalIntent is a proposed transaction; it must clear Validator before posting.
 type JournalIntent struct {
 	Date        time.Time     `json:"date"`
 	PeriodID    string        `json:"period_id"`
@@ -96,9 +90,8 @@ type JournalIntent struct {
 	Lines       []JournalLine `json:"lines"`
 }
 
-// JournalEntry is a posted, sealed accounting entry. Fields are exported for
-// serialization, but the ledger only exposes copies and entries are immutable
-// by accounting policy -- corrections go through new reversing entries.
+// JournalEntry is a posted, sealed accounting entry. Entries are immutable;
+// corrections go through new reversing entries.
 type JournalEntry struct {
 	ID          string        `json:"id"`
 	Date        time.Time     `json:"date"`

@@ -7,9 +7,7 @@ import (
 	"github.com/flarexio/stoa/world"
 )
 
-// tavernScenario returns a small deterministic world: Mira is a cautious
-// merchant in the tavern who owns a healing potion; the player is also present
-// but has low reputation with Mira.
+// tavernScenario: Mira (cautious merchant, owns healing_potion) and the player share the tavern.
 func tavernScenario() (world.WorldState, string) {
 	w := world.WorldState{
 		Locations: map[string]world.Location{
@@ -88,8 +86,8 @@ func TestValidator_RejectsActorNotExist(t *testing.T) {
 
 func TestValidator_RejectsActionNotAllowedForRole(t *testing.T) {
 	w, actorID := tavernScenario()
-	v := world.Validator{World: w, ActorID: actorID}
 	// Merchant role does not include ActionMove.
+	v := world.Validator{World: w, ActorID: actorID}
 	intent := world.NPCIntent{Action: world.Action{Type: world.ActionMove, LocationID: "north_road"}}
 	if err := v.Validate(context.Background(), intent); err == nil {
 		t.Fatal("expected error for action not allowed for merchant role")
@@ -116,7 +114,6 @@ func TestValidator_RejectsTargetNotExist(t *testing.T) {
 
 func TestValidator_RejectsTargetInDifferentLocation(t *testing.T) {
 	w, actorID := tavernScenario()
-	// Move player out of the tavern.
 	player := w.Actors["player"]
 	player.LocationID = "north_road"
 	w.Actors["player"] = player
@@ -129,7 +126,6 @@ func TestValidator_RejectsTargetInDifferentLocation(t *testing.T) {
 
 func TestValidator_RejectsGiveItemNotOwned(t *testing.T) {
 	w, actorID := tavernScenario()
-	// Item doesn't exist in the world at all.
 	v := world.Validator{World: w, ActorID: actorID}
 	intent := world.NPCIntent{
 		Say:    "Here, take this.",
@@ -142,7 +138,7 @@ func TestValidator_RejectsGiveItemNotOwned(t *testing.T) {
 
 func TestValidator_RejectsGiveItemNotInInventory(t *testing.T) {
 	w, actorID := tavernScenario()
-	// Item exists in world but is not in Mira's inventory.
+	// dragons_egg is in the world but not in Mira's inventory.
 	w.Items["dragons_egg"] = world.Item{ID: "dragons_egg", Name: "Dragon's Egg", Value: 1000}
 	v := world.Validator{World: w, ActorID: actorID}
 	intent := world.NPCIntent{
@@ -156,7 +152,7 @@ func TestValidator_RejectsGiveItemNotInInventory(t *testing.T) {
 
 func TestValidator_RejectsMoveToUnreachableLocation(t *testing.T) {
 	w, _ := tavernScenario()
-	// Dungeon exists but is not connected from the tavern.
+	// dungeon exists but is not connected from the tavern.
 	w.Locations["dungeon"] = world.Location{ID: "dungeon", Name: "Dungeon"}
 	v := world.Validator{World: w, ActorID: "player"}
 	intent := world.NPCIntent{Action: world.Action{Type: world.ActionMove, LocationID: "dungeon"}}

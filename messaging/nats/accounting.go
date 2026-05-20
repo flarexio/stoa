@@ -12,17 +12,16 @@ import (
 )
 
 // accountingBus is the NATS JetStream backed bookkeeping.EventBus for the
-// accounting domain. It encodes JournalPosted events to JSON, reuses the
-// generic *bus for transport, and translates broker rejections into
-// accounting.ErrConcurrentUpdate so the inproc and NATS transports surface the
-// same sentinel.
+// accounting domain. It encodes JournalPosted to JSON and translates broker
+// "wrong last sequence" into accounting.ErrConcurrentUpdate so the inproc and
+// NATS transports surface the same sentinel.
 type accountingBus struct {
 	bus *bus
 }
 
-// NewAccountingBus opens a NATS JetStream connection and returns a
-// bookkeeping.EventBus configured for accounting JournalPosted events. Close on
-// the returned bus drains the consume loop and releases the connection.
+// NewAccountingBus opens NATS and returns a bookkeeping.EventBus configured for
+// accounting JournalPosted events. Close drains the consume loop and releases
+// the connection.
 func NewAccountingBus(ctx context.Context, cfg Config) (bookkeeping.EventBus, error) {
 	b, err := connect(ctx, cfg)
 	if err != nil {
@@ -31,10 +30,6 @@ func NewAccountingBus(ctx context.Context, cfg Config) (bookkeeping.EventBus, er
 	return &accountingBus{bus: b}, nil
 }
 
-// Publish marshals evt.Entry to JSON, publishes it with the
-// optimistic-concurrency option when expect.Subject is non-empty, then stamps
-// the broker-assigned Subject and Sequence on the returned event. A "wrong last
-// sequence" rejection becomes accounting.ErrConcurrentUpdate.
 func (a *accountingBus) Publish(ctx context.Context, evt accounting.JournalPosted, expect accounting.ExpectedSequence) (accounting.JournalPosted, error) {
 	body, err := encodeAccountingEvent(evt)
 	if err != nil {
@@ -54,10 +49,8 @@ func (a *accountingBus) Publish(ctx context.Context, evt accounting.JournalPoste
 	return stampAccountingPubAck(evt, a.bus.subject, seq), nil
 }
 
-// Subscribe starts the consume loop. Each message gets its own context with the
-// bus's AckWait as deadline; a successful handler call Acks the message, and a
-// handler or decode error Naks it for redelivery. Subscribing twice returns an
-// error; tear the bus down via Close before re-subscribing.
+// Subscribe starts the consume loop. A successful handler Acks; a decode or
+// handler error Naks for redelivery.
 func (a *accountingBus) Subscribe(handler bookkeeping.EventHandler) error {
 	return a.bus.subscribeMessages(func(msg jetstream.Msg) {
 		ctx, cancel := context.WithTimeout(context.Background(), a.bus.ackWait)
@@ -75,16 +68,12 @@ func (a *accountingBus) Subscribe(handler bookkeeping.EventHandler) error {
 	})
 }
 
-// Close drains the consume loop and closes the underlying NATS connection.
 func (a *accountingBus) Close() error {
 	return a.bus.close()
 }
 
-// --- pure helpers ---
-
-// encodeAccountingEvent serialises the on-wire body. Subject and Sequence are
-// excluded from the JSON (json:"-") because the transport, not the body, is
-// their source of truth.
+// Subject and Sequence are excluded from JSON because the transport, not the
+// body, is their source of truth.
 func encodeAccountingEvent(evt accounting.JournalPosted) ([]byte, error) {
 	body, err := json.Marshal(evt)
 	if err != nil {
@@ -93,8 +82,6 @@ func encodeAccountingEvent(evt accounting.JournalPosted) ([]byte, error) {
 	return body, nil
 }
 
-// decodeAccountingEvent reverses encodeAccountingEvent and stamps the
-// broker-supplied subject and sequence onto the event.
 func decodeAccountingEvent(body []byte, subject string, sequence uint64) (accounting.JournalPosted, error) {
 	var evt accounting.JournalPosted
 	if err := json.Unmarshal(body, &evt); err != nil {
@@ -103,16 +90,14 @@ func decodeAccountingEvent(body []byte, subject string, sequence uint64) (accoun
 	return stampAccountingPubAck(evt, subject, sequence), nil
 }
 
-// stampAccountingPubAck applies the broker-assigned subject and sequence to an
-// event, leaving the producer-assigned Entry.ID untouched.
+// stampAccountingPubAck stamps broker-assigned subject and sequence onto evt,
+// leaving the producer-assigned Entry.ID untouched.
 func stampAccountingPubAck(evt accounting.JournalPosted, subject string, sequence uint64) accounting.JournalPosted {
 	evt.Subject = subject
 	evt.Sequence = sequence
 	return evt
 }
 
-// decodeAccountingMsg pulls the subject and stream sequence out of a JetStream
-// message and decodes the body into a JournalPosted.
 func decodeAccountingMsg(msg jetstream.Msg) (accounting.JournalPosted, error) {
 	meta, err := msg.Metadata()
 	if err != nil {

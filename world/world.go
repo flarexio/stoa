@@ -1,9 +1,9 @@
-// Package world is the game-domain package for Stoa's NPC harness. It defines
-// typed world state, actors, items, locations, and the NPCIntent that flows
-// through the reason->validate->execute loop. It depends on no LLM SDK, the
-// harness, or any provider-specific code.
+// Package world is the game-domain package for Stoa's NPC harness: typed
+// world state, actors, items, locations, and the NPCIntent that flows through
+// the reason -> validate -> execute loop. No LLM, harness, or provider code.
 package world
 
+// ActorRole names what an Actor can do in the world.
 type ActorRole string
 
 const (
@@ -13,6 +13,7 @@ const (
 	RoleBandit   ActorRole = "bandit"
 )
 
+// ActionType is one verb an actor can perform on a turn.
 type ActionType string
 
 const (
@@ -41,7 +42,7 @@ var itemActions = map[ActionType]bool{
 	ActionGive: true, ActionTrade: true,
 }
 
-// roleAllowedActions maps each role to the set of actions it may perform.
+// roleAllowedActions is the set of actions each role may perform.
 var roleAllowedActions = map[ActorRole]map[ActionType]bool{
 	RoleMerchant: {
 		ActionSpeak: true, ActionOffer: true, ActionRefuse: true,
@@ -79,7 +80,7 @@ type Actor struct {
 	Name        string      `json:"name"`
 	Role        ActorRole   `json:"role"`
 	LocationID  string      `json:"location_id"`
-	Inventory   []string    `json:"inventory"` // Item IDs
+	Inventory   []string    `json:"inventory"` // item IDs
 	Personality Personality `json:"personality"`
 }
 
@@ -102,7 +103,7 @@ func RelationKey(from, to string) string {
 	return from + ":" + to
 }
 
-// Action is a proposed game action within an NPCIntent.
+// Action is the proposed game action carried in an NPCIntent.
 type Action struct {
 	Type       ActionType `json:"type"`
 	TargetID   string     `json:"target_id,omitempty"`
@@ -110,8 +111,7 @@ type Action struct {
 	LocationID string     `json:"location_id,omitempty"`
 }
 
-// NPCIntent is the typed output of an NPC reasoning step: dialogue, emotional
-// state, and the proposed action for one turn.
+// NPCIntent is the typed output of one NPC reasoning step.
 type NPCIntent struct {
 	Say     string `json:"say"`
 	Emotion string `json:"emotion"`

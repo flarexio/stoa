@@ -12,15 +12,12 @@ import (
 
 const toolFindAccounts = "find_accounts"
 
-// findAccountsArgs is the typed parameter shape for the find_accounts tool; the
-// model supplies it as JSON and the handler decodes it here.
 type findAccountsArgs struct {
 	NameContains string `json:"name_contains"`
 	Type         string `json:"type"`
 }
 
-// accountTools returns the tool handlers the bookkeeping agent exposes, keyed
-// by tool name for loop.Runner.Tools.
+// accountTools returns the tool handlers the bookkeeping agent exposes.
 func accountTools(repo accounting.LedgerRepository) map[string]loop.ToolHandler {
 	return map[string]loop.ToolHandler{
 		toolFindAccounts: findAccountsHandler(repo),
@@ -49,8 +46,6 @@ func findAccountsHandler(repo accounting.LedgerRepository) loop.ToolHandler {
 	}
 }
 
-// formatAccountMatches renders matched accounts as the text the model reads on
-// its next turn.
 func formatAccountMatches(accounts []accounting.Account) string {
 	if len(accounts) == 0 {
 		return "No active accounts match. Try a broader search term."

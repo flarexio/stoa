@@ -6,9 +6,8 @@ import (
 	"slices"
 )
 
-// Validator enforces hard game rules for an NPCIntent before execution.
-// World's maps are not deep-copied; callers must not mutate them while a
-// Validator is in use.
+// Validator enforces hard game rules for an NPCIntent before execution. World's
+// maps are not deep-copied; callers must not mutate them while Validator is in use.
 type Validator struct {
 	World   WorldState
 	ActorID string

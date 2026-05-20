@@ -17,9 +17,7 @@ func (f fakeEngineFunc) Predict(ctx context.Context, input llm.ReasoningInput) (
 	return f(ctx, input)
 }
 
-// tavernScenario is a small deterministic fixture for NPC tests.
-// Mira is a cautious merchant who owns a healing potion; the player is in
-// the same tavern but has low reputation with Mira. North road has bandits.
+// tavernScenario: Mira owns healing_potion; player has low rep with her.
 func tavernScenario() (world.WorldState, string) {
 	return world.WorldState{
 		Locations: map[string]world.Location{
@@ -85,7 +83,6 @@ func TestAgent_CorrectsAfterValidationFeedback(t *testing.T) {
 		calls++
 		switch calls {
 		case 1:
-			// First attempt: Mira tries to give an item she doesn't own.
 			return llm.ReasoningResult[world.NPCIntent]{
 				Rationale: "be generous",
 				Intent: world.NPCIntent{
@@ -104,7 +101,6 @@ func TestAgent_CorrectsAfterValidationFeedback(t *testing.T) {
 			if !sawValidationErr {
 				t.Errorf("expected validation_error event on retry, got events %+v", input.Events)
 			}
-			// Second attempt: Mira speaks instead.
 			return llm.ReasoningResult[world.NPCIntent]{
 				Rationale: "corrected: I can only give what I own",
 				Intent: world.NPCIntent{
@@ -131,8 +127,8 @@ func TestAgent_CorrectsAfterValidationFeedback(t *testing.T) {
 
 func TestAgent_GivesUpAfterMaxTurns(t *testing.T) {
 	w, actorID := tavernScenario()
+	// Merchant role does not include ActionMove — always invalid.
 	engine := fakeEngineFunc(func(_ context.Context, _ llm.ReasoningInput) (llm.ReasoningResult[world.NPCIntent], error) {
-		// Merchant role does not include ActionMove — always invalid.
 		return llm.ReasoningResult[world.NPCIntent]{
 			Rationale: "stubborn",
 			Intent:    world.NPCIntent{Action: world.Action{Type: world.ActionMove, LocationID: "north_road"}},

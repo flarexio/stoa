@@ -71,8 +71,7 @@ func runTUI(ctx context.Context, c *cli.Command) error {
 		return errors.New("tui: provide at least one scenario JSON file (accounting or world)")
 	}
 
-	// Classify every scenario up front so config.yaml is only required
-	// when at least one bookkeeper (accounting) scenario is present.
+	// Classify up front so config.yaml is only required when a bookkeeper scenario is present.
 	type classified struct {
 		path   string
 		acc    accounting.Scenario
@@ -123,9 +122,7 @@ func runTUI(ctx context.Context, c *cli.Command) error {
 	return tui.Run(ctx, options)
 }
 
-// classifyScenario decides whether path is an accounting scenario or a
-// world scenario by trial decode. Both loaders reject unknown fields, so
-// a file decodes cleanly under at most one of them.
+// classifyScenario picks accounting vs world by trial decode (both loaders reject unknown fields).
 func classifyScenario(path string) (accounting.Scenario, world.Scenario, bool, error) {
 	if acc, err := accounting.LoadScenarioFile(path); err == nil {
 		return acc, world.Scenario{}, true, nil
@@ -137,8 +134,7 @@ func classifyScenario(path string) (accounting.Scenario, world.Scenario, bool, e
 		fmt.Errorf("tui: %s is not a recognized accounting or world scenario", path)
 }
 
-// tuiComposer turns classified scenarios into tui.Options. It owns the
-// composition; the tui package only ever sees the resulting Options.
+// tuiComposer turns classified scenarios into tui.Options.
 type tuiComposer struct {
 	cfg        *config.Config
 	engineKind string
@@ -148,12 +144,8 @@ type tuiComposer struct {
 	maxTurns   int
 }
 
-// bookOption builds a selectable bookkeeper session for an accounting scenario.
-// The repository, bus, and engine are composed lazily inside Start.
-//
-// The TUI is a live front-end: it connects to a ledger already seeded out of
-// band by `stoa seed` and never seeds on startup. An empty repository (no open
-// period below) means the seed step was skipped.
+// bookOption is a selectable bookkeeper session; the TUI never seeds, it
+// connects to a ledger already seeded by `stoa seed`.
 func (comp tuiComposer) bookOption(path string, scenario accounting.Scenario) tui.Option {
 	return tui.Option{
 		Label: "bookkeeper · " + scenarioLabel(scenario.Name, path),
@@ -198,8 +190,7 @@ func (comp tuiComposer) bookOption(path string, scenario accounting.Scenario) tu
 	}
 }
 
-// npcOptions builds one selectable npc session per actor in a world
-// scenario.
+// npcOptions builds one selectable session per actor in scenario.
 func (comp tuiComposer) npcOptions(path string, scenario world.Scenario) []tui.Option {
 	var options []tui.Option
 	for _, actorID := range sortedActorIDs(scenario.State.Actors) {
@@ -218,8 +209,6 @@ func (comp tuiComposer) npcOptions(path string, scenario world.Scenario) []tui.O
 	return options
 }
 
-// scenarioLabel prefers the scenario's declared name, falling back to the
-// file's base name.
 func scenarioLabel(name, path string) string {
 	if name != "" {
 		return name
@@ -227,7 +216,6 @@ func scenarioLabel(name, path string) string {
 	return strings.TrimSuffix(filepath.Base(path), filepath.Ext(path))
 }
 
-// bookSession adapts a bookkeeper.Bookkeeper to tui.Session.
 type bookSession struct {
 	agent   bookkeeper.Bookkeeper
 	closers []io.Closer
@@ -254,7 +242,6 @@ func (s *bookSession) Close() error {
 	return errors.Join(errs...)
 }
 
-// npcSession adapts an npc.NPC to tui.Session.
 type npcSession struct {
 	agent   npc.NPC
 	actorID string

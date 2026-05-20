@@ -1,3 +1,4 @@
+// Package openai is the OpenAI adapter for llm.ReasoningEngine.
 package openai
 
 import (
@@ -21,8 +22,8 @@ const (
 	OutputFormatJSONObject OutputFormat = "json_object"
 )
 
-// Config contains only provider concerns. Domain rules and feature prompts stay
-// outside this adapter and enter through llm.ReasoningInput.
+// Config contains only provider concerns; domain rules and feature prompts
+// enter through llm.ReasoningInput.
 type Config[TIntent any] struct {
 	APIKey       string
 	Model        string
@@ -40,6 +41,9 @@ type Adapter[TIntent any] struct {
 	decoder      llm.Decoder[TIntent]
 }
 
+// NewAdapter wires the SDK client and the renderer/decoder pair. APIKey
+// defaults to $OPENAI_API_KEY; Renderer and Decoder default to llm's generic
+// implementations.
 func NewAdapter[TIntent any](cfg Config[TIntent]) (*Adapter[TIntent], error) {
 	apiKey := strings.TrimSpace(cfg.APIKey)
 	if apiKey == "" {
