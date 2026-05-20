@@ -8,21 +8,11 @@ import (
 	"github.com/flarexio/stoa/accounting/bookkeeping"
 )
 
-// accountingBus is an in-process bookkeeping.EventBus for the accounting
-// domain. It dispatches every published event synchronously to all
-// subscribed handlers under a single mutex, so Publish returns only
-// after every handler has finished. That makes the bus suitable for
-// tests that assert projection state immediately after Publish without
-// polling, and for single-process wiring that does not need cross-
-// process fanout.
-//
-// Optimistic concurrency follows the same model as NATS JetStream's
-// Nats-Expected-Last-Subject-Sequence header: a producer that sends an
-// ExpectedSequence whose LastSeq does not match the broker's view is
+// accountingBus is the in-process bookkeeping.EventBus. It dispatches every
+// published event synchronously to all subscribed handlers under one mutex.
+// Optimistic concurrency mirrors NATS JetStream's
+// Nats-Expected-Last-Subject-Sequence: a stale ExpectedSequence.LastSeq is
 // rejected with accounting.ErrConcurrentUpdate before any handler runs.
-//
-// The type stays unexported so callers depend only on the EventBus
-// interface returned by NewAccountingBus.
 type accountingBus struct {
 	mu        sync.Mutex
 	streamSeq uint64
@@ -30,17 +20,13 @@ type accountingBus struct {
 	handlers  []bookkeeping.EventHandler
 }
 
-// NewAccountingBus returns an empty in-process bookkeeping.EventBus for
-// JournalPosted events.
+// NewAccountingBus returns an empty in-process bookkeeping.EventBus.
 func NewAccountingBus() bookkeeping.EventBus {
 	return &accountingBus{lastSubj: make(map[string]uint64)}
 }
 
-// Subscribe registers handler to receive every subsequent JournalPosted
-// published through the bus. Handlers run in registration order under
-// the calling goroutine; the bus has no fan-out concurrency. The error
-// return exists to match bookkeeping.EventSubscriber; this transport
-// never errors on registration.
+// Subscribe registers handler to receive every subsequent JournalPosted.
+// Handlers run in registration order on the publishing goroutine.
 func (b *accountingBus) Subscribe(handler bookkeeping.EventHandler) error {
 	b.mu.Lock()
 	b.handlers = append(b.handlers, handler)
@@ -48,20 +34,11 @@ func (b *accountingBus) Subscribe(handler bookkeeping.EventHandler) error {
 	return nil
 }
 
-// Close releases any resources the bus owns. The in-process bus owns
-// nothing, so Close is a no-op that exists only to satisfy
-// bookkeeping.EventBus.
+// Close is a no-op: the in-process bus owns nothing.
 func (b *accountingBus) Close() error {
 	return nil
 }
 
-// Publish assigns the next broker sequence under the bus's mutex (so
-// the optimistic-concurrency check and the sequence assignment are
-// atomic), stamps Subject + Sequence onto the event for transport-
-// level routing, and dispatches it to every subscribed handler.
-// Entry.ID is set by the producer before Publish is called (the
-// PostJournal use case picks it as FormatEntryID(lastSeq+1)) and the
-// transport carries it through unchanged.
 func (b *accountingBus) Publish(ctx context.Context, evt accounting.JournalPosted, expect accounting.ExpectedSequence) (accounting.JournalPosted, error) {
 	b.mu.Lock()
 	if expect.Subject != "" {

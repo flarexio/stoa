@@ -21,8 +21,7 @@ func awsBillPath(t *testing.T) string {
 
 const inProcessConfig = "persistence:\n  kind: memory\nmessaging:\n  kind: inproc\n"
 
-// seedConfigBody points $HOME at a fresh tempdir and drops the given
-// config.yaml body in the default ~/.flarex/stoa location.
+// seedConfigBody points $HOME at a tempdir and writes config.yaml at ~/.flarex/stoa/.
 func seedConfigBody(t *testing.T, body string) {
 	t.Helper()
 	home := t.TempDir()
@@ -37,19 +36,14 @@ func seedConfigBody(t *testing.T, body string) {
 	}
 }
 
-// seedInProcessConfig drops a memory+inproc config.yaml in the default
-// ~/.flarex/stoa location. Tests that exercise the no-flag happy path
-// use this so they neither inherit a developer's local config nor
-// depend on the (now removed) in-process fallback that used to fire
-// when the file was missing.
+// seedInProcessConfig writes a memory+inproc config so no-flag tests don't
+// inherit the developer's local config.
 func seedInProcessConfig(t *testing.T) {
 	t.Helper()
 	seedConfigBody(t, inProcessConfig)
 }
 
-// isolateHome points $HOME at a fresh tempdir without seeding a config
-// file. Use it for tests that either supply --work-dir explicitly or
-// expect the default-dir lookup to fail.
+// isolateHome points $HOME at an empty tempdir; no config.yaml is written.
 func isolateHome(t *testing.T) string {
 	t.Helper()
 	home := t.TempDir()
@@ -192,17 +186,12 @@ func TestRunBook_OpenAIRequiresModel(t *testing.T) {
 	}
 }
 
-// llmOpenAIConfig selects the openai engine + model through the llm
-// block, on top of the in-process persistence/messaging backends.
 const llmOpenAIConfig = "persistence:\n  kind: memory\nmessaging:\n  kind: inproc\n" +
 	"llm:\n  engine: openai\n  model: gpt-5.4-mini\n"
 
 func TestRunBook_ConfigLLMSelectsOpenAIEngine(t *testing.T) {
-	// config.yaml selects the openai engine + model; no --engine or
-	// --model flag is passed. The run must reach the openai engine and
-	// fail on the absent API key -- which proves both the engine and
-	// the model were taken from the config llm block (a default to the
-	// scripted engine would instead post an entry with no error).
+	// Failing on the absent API key proves the config llm block was used --
+	// a scripted-engine default would have posted with no error.
 	seedConfigBody(t, llmOpenAIConfig)
 	t.Setenv("OPENAI_API_KEY", "")
 	var stdout, stderr bytes.Buffer
@@ -217,8 +206,6 @@ func TestRunBook_ConfigLLMSelectsOpenAIEngine(t *testing.T) {
 }
 
 func TestRunBook_EngineFlagOverridesConfigLLM(t *testing.T) {
-	// config.yaml selects openai, but --engine scripted overrides it;
-	// the run succeeds offline with no API key.
 	seedConfigBody(t, llmOpenAIConfig)
 	var stdout, stderr bytes.Buffer
 	args := []string{awsBillPath(t), "--request", "Paid AWS bill", "--engine", "scripted"}
@@ -286,9 +273,7 @@ func TestRunBook_WorkDirMissingConfigYAML(t *testing.T) {
 }
 
 func TestRunBook_DefaultDirLoaded(t *testing.T) {
-	// Seed a bad config in the default dir; if the binary reads it, the
-	// error mentions the bad kind. That's the cheapest proof the lookup
-	// fell back to ~/.flarex/stoa rather than skipping config entirely.
+	// A bad config at ~/.flarex/stoa/ -- the bad-kind error proves the fallback fired.
 	home := isolateHome(t)
 	cfgDir := filepath.Join(home, ".flarex", "stoa")
 	if err := os.MkdirAll(cfgDir, 0o755); err != nil {
@@ -309,8 +294,7 @@ func TestRunBook_DefaultDirLoaded(t *testing.T) {
 }
 
 func TestRunBook_DefaultDirMissingErrors(t *testing.T) {
-	// $HOME has no .flarex/stoa/config.yaml; the binary must error
-	// instead of silently degrading to in-process defaults.
+	// Missing default config must error, not silently fall back to in-process.
 	isolateHome(t)
 	var stdout, stderr bytes.Buffer
 	args := []string{awsBillPath(t), "--request", "x"}

@@ -37,9 +37,7 @@ func TestBus_PublishStampsSubjectAndSequenceAndCarriesEntryID(t *testing.T) {
 		return nil
 	}))
 
-	// Entry.ID is producer-assigned (the agent picks FormatEntryID(lastSeq+1)
-	// before publishing). The bus only stamps Subject and Sequence -- it
-	// must carry the producer's ID through to handlers unchanged.
+	// Entry.ID is producer-assigned; the bus stamps Subject+Sequence only.
 	in := sampleEvent()
 	in.Entry.ID = accounting.FormatEntryID(1)
 

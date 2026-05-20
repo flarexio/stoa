@@ -74,10 +74,7 @@ func runSeed(ctx context.Context, c *cli.Command, stdout io.Writer) error {
 	return nil
 }
 
-// loadSeedScenarios reads path as a single YAML seed file or, when path is a
-// directory, as every *.yaml / *.yml file inside it. Directory entries are
-// sorted by name so the apply order is deterministic; because applying a
-// seed is an upsert, order changes the log but not the resulting state.
+// loadSeedScenarios reads path as one file or every *.yaml / *.yml in a directory (sorted).
 func loadSeedScenarios(path string) ([]accounting.Scenario, error) {
 	info, err := os.Stat(path)
 	if err != nil {

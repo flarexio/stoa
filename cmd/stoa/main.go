@@ -1,7 +1,4 @@
-// Command stoa is the demo CLI for Stoa's vertical slices. Each subcommand
-// wires a scenario JSON file through the same reason → validate → execute
-// loop the underlying package uses in tests, with a deterministic scripted
-// reasoning engine so no live LLM provider is needed.
+// Command stoa is the demo CLI for Stoa's vertical slices.
 package main
 
 import (

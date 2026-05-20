@@ -1,10 +1,9 @@
-// Package world is the game-domain package for Stoa's NPC harness.
-// It defines typed world state, actors, items, locations, and the NPCIntent
-// that flows through the reason→validate→execute loop. This package has no
-// dependency on LLM SDKs, the harness, or any provider-specific code.
+// Package world is the game-domain package for Stoa's NPC harness: typed
+// world state, actors, items, locations, and the NPCIntent that flows through
+// the reason -> validate -> execute loop. No LLM, harness, or provider code.
 package world
 
-// ActorRole describes the role an actor plays in the world.
+// ActorRole names what an Actor can do in the world.
 type ActorRole string
 
 const (
@@ -14,7 +13,7 @@ const (
 	RoleBandit   ActorRole = "bandit"
 )
 
-// ActionType names the kind of action an NPC proposes.
+// ActionType is one verb an actor can perform on a turn.
 type ActionType string
 
 const (
@@ -43,7 +42,7 @@ var itemActions = map[ActionType]bool{
 	ActionGive: true, ActionTrade: true,
 }
 
-// roleAllowedActions maps each role to the set of actions it may perform.
+// roleAllowedActions is the set of actions each role may perform.
 var roleAllowedActions = map[ActorRole]map[ActionType]bool{
 	RoleMerchant: {
 		ActionSpeak: true, ActionOffer: true, ActionRefuse: true,
@@ -60,7 +59,6 @@ var roleAllowedActions = map[ActorRole]map[ActionType]bool{
 	},
 }
 
-// Personality holds personality traits for an actor.
 type Personality struct {
 	Cautious bool `json:"cautious"`
 	Friendly bool `json:"friendly"`
@@ -71,24 +69,21 @@ type Relationship struct {
 	Reputation int `json:"reputation"` // -100 to 100
 }
 
-// Location is a place in the game world.
 type Location struct {
 	ID          string   `json:"id"`
 	Name        string   `json:"name"`
 	Connections []string `json:"connections"` // IDs of reachable locations
 }
 
-// Actor is a character (NPC or player) in the game world.
 type Actor struct {
 	ID          string      `json:"id"`
 	Name        string      `json:"name"`
 	Role        ActorRole   `json:"role"`
 	LocationID  string      `json:"location_id"`
-	Inventory   []string    `json:"inventory"` // Item IDs
+	Inventory   []string    `json:"inventory"` // item IDs
 	Personality Personality `json:"personality"`
 }
 
-// Item is an object in the game world.
 type Item struct {
 	ID    string `json:"id"`
 	Name  string `json:"name"`
@@ -108,7 +103,7 @@ func RelationKey(from, to string) string {
 	return from + ":" + to
 }
 
-// Action is a proposed game action within an NPCIntent.
+// Action is the proposed game action carried in an NPCIntent.
 type Action struct {
 	Type       ActionType `json:"type"`
 	TargetID   string     `json:"target_id,omitempty"`
@@ -116,8 +111,7 @@ type Action struct {
 	LocationID string     `json:"location_id,omitempty"`
 }
 
-// NPCIntent is the typed output of an NPC reasoning step. It carries the
-// dialogue, emotional state, and proposed action for one turn.
+// NPCIntent is the typed output of one NPC reasoning step.
 type NPCIntent struct {
 	Say     string `json:"say"`
 	Emotion string `json:"emotion"`

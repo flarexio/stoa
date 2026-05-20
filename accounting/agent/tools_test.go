@@ -13,9 +13,6 @@ import (
 	"github.com/flarexio/stoa/llm"
 )
 
-// TestAgent_RunsToolCallBeforePosting drives the agent through one
-// find_accounts tool round and then a posting turn, and checks the tool
-// result reaches the model before it proposes the intent.
 func TestAgent_RunsToolCallBeforePosting(t *testing.T) {
 	repo := awsBillRepo(t)
 	bus := wireBus(t, repo)
@@ -69,9 +66,6 @@ func TestAgent_RunsToolCallBeforePosting(t *testing.T) {
 	}
 }
 
-// TestPromptRenderer_SwitchesToToolModeForLargeChart checks the adaptive
-// threshold: a small chart is dumped into the prompt, a large one is put
-// behind the find_accounts tool instead.
 func TestPromptRenderer_SwitchesToToolModeForLargeChart(t *testing.T) {
 	mk := func(n int) []accounting.Account {
 		accounts := make([]accounting.Account, n)

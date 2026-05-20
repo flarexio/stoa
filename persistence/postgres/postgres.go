@@ -1,20 +1,13 @@
 // Package postgres provides Postgres-backed repository adapters via
-// sqlc-generated queries on top of pgx/v5. The schema and the queries
-// live alongside the wrapper:
+// sqlc-generated queries on top of pgx/v5.
 //
 //	migrations/  -- golang-migrate up/down SQL applied out of band
 //	sqlc/        -- queries.sql, the sqlc input
 //	pgstore/     -- sqlc-generated Go (DO NOT EDIT by hand)
 //
-// To regenerate pgstore after editing the schema or queries, run:
+// Regenerate pgstore with: cd persistence/postgres && sqlc generate
 //
-//	cd persistence/postgres && sqlc generate
-//
-// One file per domain: domain-specific repository code (struct,
-// constructor, port implementation, queries, mappers) lives in
-// <domain>.go (e.g. accounting.go). The generic plumbing kept in this
-// file -- pool connection + io.Closer adapter -- is shared by every
-// domain factory in the package.
+// One file per domain (e.g. accounting.go).
 package postgres
 
 import (
@@ -25,10 +18,8 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// connectPool opens a pgxpool.Pool from dsn, pings it, and returns the
-// pool alongside an io.Closer the caller defers to release it.
-// Domain factories (see accounting.go) call this and wrap the pool in
-// their repository implementation.
+// connectPool opens a pgxpool.Pool from dsn, pings it, and returns the pool
+// alongside an io.Closer the caller defers to release it.
 func connectPool(ctx context.Context, dsn string) (*pgxpool.Pool, io.Closer, error) {
 	pool, err := pgxpool.New(ctx, dsn)
 	if err != nil {
@@ -41,8 +32,6 @@ func connectPool(ctx context.Context, dsn string) (*pgxpool.Pool, io.Closer, err
 	return pool, poolCloser{pool: pool}, nil
 }
 
-// poolCloser adapts *pgxpool.Pool to io.Closer; pgxpool.Pool.Close
-// returns no error, so we report nil unconditionally.
 type poolCloser struct {
 	pool *pgxpool.Pool
 }

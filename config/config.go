@@ -1,10 +1,6 @@
-// Package config parses the YAML file that picks which outbound adapters
-// the stoa binary wires when it boots. It is read by cmd/stoa only;
-// domain and adapter packages must not import it.
-//
-// The schema is intentionally narrow: pick a persistence kind, a
-// messaging kind, and a reasoning engine, and provide the nested block
-// each one needs. See config.example.yaml for the full shape.
+// Package config parses the YAML file that selects the stoa binary's outbound
+// adapters at boot. Read by cmd/stoa only; domain and adapter packages must
+// not import it. See config.example.yaml for the full shape.
 package config
 
 import (
@@ -18,19 +14,10 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// Filename is the fixed config file name the stoa CLI looks for inside
-// the work directory. Adapters and tooling that need to write or locate
-// the file should compose against this constant so the name stays
-// single-sourced.
+// Filename is the fixed config file name inside the stoa work directory.
 const Filename = "config.yaml"
 
-// DefaultDir returns the per-user work directory the stoa CLI uses when
-// --work-dir is not provided: ~/.flarex/stoa. The CLI reads config.yaml
-// from this directory today and may grow other per-user state
-// (credentials, cache, local sqlite, etc.) under the same root later,
-// which is why the name is "work" rather than "config". The directory
-// and the config.yaml inside it are both required at run time; callers
-// do not fall back to in-memory defaults when either is missing.
+// DefaultDir is the per-user work directory: ~/.flarex/stoa.
 func DefaultDir() (string, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -39,9 +26,7 @@ func DefaultDir() (string, error) {
 	return filepath.Join(home, ".flarex", "stoa"), nil
 }
 
-// PersistenceKind names a persistence backend the binary knows how to
-// wire. The empty string is treated as PersistenceMemory at validation
-// time so an absent persistence block degrades to in-memory.
+// PersistenceKind names the persistence backend; empty defaults to PersistenceMemory.
 type PersistenceKind string
 
 const (
@@ -49,8 +34,7 @@ const (
 	PersistencePostgres PersistenceKind = "postgres"
 )
 
-// MessagingKind names a messaging backend the binary knows how to wire.
-// The empty string is treated as MessagingInproc.
+// MessagingKind names the messaging backend; empty defaults to MessagingInproc.
 type MessagingKind string
 
 const (
@@ -58,9 +42,7 @@ const (
 	MessagingNATS   MessagingKind = "nats"
 )
 
-// EngineKind names a reasoning engine the binary knows how to wire. The
-// empty string is treated as EngineScripted so an absent llm block
-// degrades to the offline engine.
+// EngineKind names the reasoning engine; empty defaults to EngineScripted.
 type EngineKind string
 
 const (
@@ -75,33 +57,21 @@ type Config struct {
 	LLM         LLM         `yaml:"llm"`
 }
 
-// Persistence selects and configures the LedgerRepository backend.
 type Persistence struct {
 	Kind     PersistenceKind `yaml:"kind"`
 	Postgres Postgres        `yaml:"postgres"`
 }
 
-// Postgres carries the connection settings for persistence/postgres.
-// Only DSN is required; everything else is currently derived from the
-// DSN by pgx.
 type Postgres struct {
 	DSN string `yaml:"dsn"`
 }
 
-// Messaging selects and configures the EventPublisher backend.
 type Messaging struct {
 	Kind MessagingKind `yaml:"kind"`
 	NATS NATS          `yaml:"nats"`
 }
 
-// NATS carries the connection + JetStream settings for messaging/nats.
-//
-// Subject is the concrete subject the producer publishes to and the
-// consumer filters on. StreamSubject is the subject pattern the
-// JetStream stream is bound to -- usually a wildcard such as
-// "accounting.>" so the stream captures the whole namespace and future
-// subjects need no stream reconfiguration. When StreamSubject is empty
-// it defaults to Subject, binding the stream to exactly that subject.
+// NATS settings for messaging/nats. StreamSubject defaults to Subject.
 type NATS struct {
 	URL           string `yaml:"url"`
 	Stream        string `yaml:"stream"`
@@ -110,18 +80,16 @@ type NATS struct {
 	Consumer      string `yaml:"consumer"`
 }
 
-// LLM selects and configures the reasoning engine the bookkeeper agent
-// runs. Model is consulted only by the openai engine. Both fields are
-// defaults: the --engine and --model CLI flags override them when set.
+// LLM defaults for the bookkeeper agent's reasoning engine; --engine / --model
+// CLI flags override these.
 type LLM struct {
 	Engine EngineKind `yaml:"engine"`
 	Model  string     `yaml:"model"`
 }
 
-// Load reads path, decodes it strictly (unknown fields are rejected),
-// and validates the result. The returned Config has had its empty kinds
-// defaulted to the in-process backends, so callers can switch on
-// PersistenceKind / MessagingKind without re-checking for "".
+// Load reads path, decodes strictly (unknown fields rejected), and validates.
+// Empty kinds are defaulted before return so callers can switch on Kind
+// without re-checking for "".
 func Load(path string) (*Config, error) {
 	raw, err := os.ReadFile(path)
 	if err != nil {
@@ -140,8 +108,6 @@ func Load(path string) (*Config, error) {
 	return &cfg, nil
 }
 
-// applyDefaults fills empty kind selectors with the in-process backends
-// so an otherwise-empty config file still produces a runnable Config.
 func (c *Config) applyDefaults() {
 	if c.Persistence.Kind == "" {
 		c.Persistence.Kind = PersistenceMemory
@@ -157,15 +123,12 @@ func (c *Config) applyDefaults() {
 	}
 }
 
-// Validate returns an error when the selected kinds are unknown or when
-// the block a selected kind requires has been left empty. The error is
-// joined so a single Load call surfaces every problem at once.
+// Validate returns a joined error of every misconfiguration found.
 func (c *Config) Validate() error {
 	var errs []error
 
 	switch c.Persistence.Kind {
 	case PersistenceMemory:
-		// no nested block required
 	case PersistencePostgres:
 		if c.Persistence.Postgres.DSN == "" {
 			errs = append(errs, errors.New("persistence.postgres.dsn is required when persistence.kind is postgres"))
@@ -176,7 +139,6 @@ func (c *Config) Validate() error {
 
 	switch c.Messaging.Kind {
 	case MessagingInproc:
-		// no nested block required
 	case MessagingNATS:
 		if c.Messaging.NATS.URL == "" {
 			errs = append(errs, errors.New("messaging.nats.url is required when messaging.kind is nats"))
@@ -193,11 +155,8 @@ func (c *Config) Validate() error {
 
 	switch c.LLM.Engine {
 	case EngineScripted:
-		// no nested settings required
 	case EngineOpenAI:
-		// llm.model may be supplied here or via the --model flag, so it
-		// is not required at config time; the openai adapter enforces a
-		// non-empty model when the engine is actually wired.
+		// llm.model is optional at config time; --model can supply it.
 	default:
 		errs = append(errs, fmt.Errorf("llm.engine %q is not supported (scripted|openai)", c.LLM.Engine))
 	}

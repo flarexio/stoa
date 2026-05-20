@@ -9,13 +9,11 @@ import (
 	"github.com/flarexio/stoa/llm"
 )
 
-// scriptedBookEngine is a deterministic, offline llm.ReasoningEngine used
-// by the book-run demo. It first proposes a JournalIntent that the
-// accounting Validator will reject (credits short of debits), then --
-// once validation feedback appears in the cycle events -- proposes a
-// balanced intent derived from the seeded repository. This proves the
-// reason -> validate -> publish -> apply -> feedback loop end to end
-// without needing an LLM provider.
+// scriptedBookEngine is a deterministic, offline llm.ReasoningEngine for the
+// book-run demo. It first proposes a JournalIntent the accounting Validator
+// rejects (credits short of debits), then -- once validation feedback appears
+// -- proposes a balanced intent derived from the seeded repository, exercising
+// the reason -> validate -> publish -> apply -> feedback loop without an LLM.
 type scriptedBookEngine struct {
 	repo     accounting.LedgerRepository
 	amount   int64
@@ -54,9 +52,6 @@ func (e *scriptedBookEngine) Predict(ctx context.Context, input llm.ReasoningInp
 	}, nil
 }
 
-// postIntent wraps a JournalIntent as a post_journal intent. The offline
-// scripted engine only ever posts -- reverse_journal is exercised by the
-// usecase tests and reachable through the live openai engine.
 func postIntent(intent accounting.JournalIntent) bookkeeping.Intent {
 	return bookkeeping.Intent{Kind: bookkeeping.IntentPostJournal, Post: &intent}
 }

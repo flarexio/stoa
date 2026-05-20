@@ -8,19 +8,14 @@ import (
 )
 
 // Validator enforces the accounting invariants on a proposed JournalIntent.
-// It reads from a LedgerRepository -- never mutates it -- so the producer
-// loop sees the chart of accounts, open periods, and branches that the
-// projection has applied so far. Apply is reached only through Publish +
-// a subscribed EventHandler, never directly from this validator.
+// It reads from a LedgerRepository and never mutates it.
 type Validator struct {
 	Repo LedgerRepository
 }
 
-// Validate returns nil if intent satisfies every accounting invariant, or
-// a joined error describing every domain violation so the bookkeeping
-// agent can fix them all in one correction cycle. Infrastructure errors
-// from Repo (e.g. a SQL backend failing) are returned immediately and
-// are not joined with domain violations.
+// Validate returns nil if intent satisfies every invariant, or a joined error
+// describing every domain violation so the agent can fix them in one cycle.
+// Infrastructure errors from Repo are returned immediately, not joined.
 func (v Validator) Validate(ctx context.Context, intent JournalIntent) error {
 	if v.Repo == nil {
 		return errors.New("accounting: validator has no repository")

@@ -9,8 +9,6 @@ import (
 	"github.com/flarexio/stoa/accounting/bookkeeping"
 )
 
-// TestRegistry_RoutesPostJournal drives a post_journal intent through the
-// registry and checks it reaches PostJournal: an entry lands in the ledger.
 func TestRegistry_RoutesPostJournal(t *testing.T) {
 	ctx := context.Background()
 	repo, bus := seededLedger(t)
@@ -31,9 +29,6 @@ func TestRegistry_RoutesPostJournal(t *testing.T) {
 	}
 }
 
-// TestRegistry_RoutesReverseJournal posts an entry, then drives a
-// reverse_journal intent through the same registry and checks it reaches
-// ReverseJournal: a second, reversing entry lands in the ledger.
 func TestRegistry_RoutesReverseJournal(t *testing.T) {
 	ctx := context.Background()
 	repo, bus := seededLedger(t)
@@ -59,8 +54,6 @@ func TestRegistry_RoutesReverseJournal(t *testing.T) {
 	}
 }
 
-// TestRegistry_RejectsUnknownKind shows an unrecognised Kind is a routed
-// validation error -- correctable feedback for the loop, not a panic.
 func TestRegistry_RejectsUnknownKind(t *testing.T) {
 	repo, bus := seededLedger(t)
 	reg := bookkeeping.NewBookkeepingRegistry(repo, bus, fixedClock, "")
@@ -74,8 +67,6 @@ func TestRegistry_RejectsUnknownKind(t *testing.T) {
 	}
 }
 
-// TestRegistry_RejectsMissingPayload shows an intent whose Kind selects a
-// payload the model did not fill is rejected, not nil-dereferenced.
 func TestRegistry_RejectsMissingPayload(t *testing.T) {
 	repo, bus := seededLedger(t)
 	reg := bookkeeping.NewBookkeepingRegistry(repo, bus, fixedClock, "")
@@ -88,10 +79,7 @@ func TestRegistry_RejectsMissingPayload(t *testing.T) {
 	}
 }
 
-// TestRegistry_KindsMatchIntents is the drift guard: the kinds the
-// registry routes must be exactly the vocabulary Intents() describes for
-// the prompt, so the model is never offered an intent the registry cannot
-// route, nor a routable intent the prompt never mentions.
+// TestRegistry_KindsMatchIntents guards prompt/registry drift.
 func TestRegistry_KindsMatchIntents(t *testing.T) {
 	reg := bookkeeping.NewBookkeepingRegistry(nil, nil, nil, "")
 

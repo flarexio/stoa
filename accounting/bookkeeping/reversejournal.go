@@ -8,20 +8,10 @@ import (
 	"github.com/flarexio/stoa/accounting"
 )
 
-// ReverseJournal is the "reverse a posted entry" use case. Given the ID of
-// an existing JournalEntry it builds the mirror-image entry -- every line's
-// debit and credit swapped -- and posts it through PostJournal. The
-// original entry is never touched: a reversal is a new, immutable entry
-// that cancels the first, which is the only correction double-entry
-// bookkeeping allows (see the accounting package overview).
-//
-// The reversing entry is posted into the original entry's period and date.
-// If that period has since closed the domain validator rejects it, and the
-// harness loop surfaces that to the model as correctable feedback.
-//
-// Like PostJournal it owns no reasoning engine: the agent drives Validate
-// and Execute as the two harness-loop steps, while a non-LLM caller
-// reverses an entry in one call through Handle.
+// ReverseJournal is the "reverse a posted entry" use case. It builds the
+// mirror-image entry -- every line's side swapped -- and posts it through
+// PostJournal into the original's period and date. The original entry is
+// never touched.
 type ReverseJournal struct {
 	Repo      accounting.LedgerRepository
 	Publisher EventPublisher
@@ -29,9 +19,8 @@ type ReverseJournal struct {
 	Subject   string
 }
 
-// Validate reports whether intent names an existing entry and the
-// resulting reversal satisfies every accounting invariant. It runs no
-// side effect.
+// Validate runs no side effect; it reports whether intent names an existing
+// entry and the resulting reversal satisfies every accounting invariant.
 func (uc ReverseJournal) Validate(ctx context.Context, intent ReverseIntent) error {
 	reversal, err := uc.reversalIntent(ctx, intent)
 	if err != nil {
@@ -40,9 +29,8 @@ func (uc ReverseJournal) Validate(ctx context.Context, intent ReverseIntent) err
 	return uc.post().Validate(ctx, reversal)
 }
 
-// Execute posts the reversing entry for an already-validated intent and
-// returns it. It does not re-validate -- a caller that has not validated
-// first must use Handle.
+// Execute posts the reversing entry for an already-validated intent. It does
+// not re-validate; unvalidated callers must use Handle.
 func (uc ReverseJournal) Execute(ctx context.Context, intent ReverseIntent) (accounting.JournalEntry, error) {
 	reversal, err := uc.reversalIntent(ctx, intent)
 	if err != nil {
@@ -51,8 +39,7 @@ func (uc ReverseJournal) Execute(ctx context.Context, intent ReverseIntent) (acc
 	return uc.post().Execute(ctx, reversal)
 }
 
-// Handle validates intent and, if it is clean, executes it -- the path a
-// non-LLM caller uses to reverse an entry in a single call.
+// Handle validates intent and, if clean, executes it.
 func (uc ReverseJournal) Handle(ctx context.Context, intent ReverseIntent) (accounting.JournalEntry, error) {
 	if err := uc.Validate(ctx, intent); err != nil {
 		return accounting.JournalEntry{}, err
@@ -60,10 +47,6 @@ func (uc ReverseJournal) Handle(ctx context.Context, intent ReverseIntent) (acco
 	return uc.Execute(ctx, intent)
 }
 
-// post returns the PostJournal use case ReverseJournal delegates to: a
-// reversal is just another journal entry, so it reaches the ledger through
-// the same validated publish path, with the same optimistic-concurrency
-// and entry-ID handling.
 func (uc ReverseJournal) post() PostJournal {
 	return PostJournal{
 		Repo:      uc.Repo,
@@ -73,9 +56,6 @@ func (uc ReverseJournal) post() PostJournal {
 	}
 }
 
-// reversalIntent loads the target entry and builds the JournalIntent that
-// mirrors it: same period, date and currency, every line's side flipped,
-// and a description that records the reversal and the intent's reason.
 func (uc ReverseJournal) reversalIntent(ctx context.Context, intent ReverseIntent) (accounting.JournalIntent, error) {
 	if uc.Repo == nil {
 		return accounting.JournalIntent{}, errors.New("bookkeeping: reverse journal has no repository")
@@ -112,10 +92,6 @@ func (uc ReverseJournal) reversalIntent(ctx context.Context, intent ReverseInten
 	}, nil
 }
 
-// flipSide swaps a debit for a credit and vice versa -- the whole of what
-// makes one entry reverse another. An unrecognised side is returned
-// unchanged so the domain validator reports it rather than this helper
-// silently masking it.
 func flipSide(side accounting.LineSide) accounting.LineSide {
 	switch side {
 	case accounting.SideDebit:

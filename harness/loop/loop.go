@@ -1,3 +1,5 @@
+// Package loop is the generic reason -> validate -> execute harness loop that
+// drives a feature's domain through an llm.ReasoningEngine.
 package loop
 
 import (
@@ -19,8 +21,7 @@ var (
 	ErrMaxTurnsExceeded = errors.New("loop: max turns exceeded")
 )
 
-// Validator is supplied by a feature or plugin. The loop owns when validation
-// runs; the feature owns the domain-specific rules.
+// Validator runs a feature's domain rules; the loop owns when validation runs.
 type Validator[TIntent any] interface {
 	Validate(ctx context.Context, intent TIntent) error
 }
@@ -31,8 +32,7 @@ func (f ValidatorFunc[TIntent]) Validate(ctx context.Context, intent TIntent) er
 	return f(ctx, intent)
 }
 
-// Executor performs a validated intent. It is a port owned by the use case and
-// implemented by adapters or infrastructure.
+// Executor performs a validated intent.
 type Executor[TIntent any] interface {
 	Execute(ctx context.Context, intent TIntent) (llm.Observation, error)
 }
@@ -43,21 +43,19 @@ func (f ExecutorFunc[TIntent]) Execute(ctx context.Context, intent TIntent) (llm
 	return f(ctx, intent)
 }
 
-// ToolHandler answers one tool call. args is the raw JSON the model supplied
-// for the call; the handler decodes it into its own typed parameters and
-// returns a result string for the model to read on the next turn. A handler
-// is owned by a feature, never by the loop -- the loop only routes a call to
-// its handler by name.
+// ToolHandler answers one tool call: it decodes args (the raw JSON the model
+// supplied) into its own typed parameters and returns a result string for the
+// model's next turn.
 type ToolHandler func(ctx context.Context, args json.RawMessage) (string, error)
 
-// EventSink receives per-turn cycle events as they happen. A caller that
-// wants to observe the reason -> validate -> execute cycle incrementally
-// (e.g. a TUI) implements this interface and sets it on Runner. When Sink
-// is nil the existing blocking Run(ctx, input) API is unchanged.
+// EventSink receives per-turn cycle events as they happen, so a caller can
+// observe the loop incrementally (e.g. a TUI). When Sink is nil, Run is a
+// plain blocking call.
 type EventSink interface {
 	Emit(ctx context.Context, event llm.CycleEvent) error
 }
 
+// Runner is the harness loop for one feature's typed Intent.
 type Runner[TIntent any] struct {
 	Engine              llm.ReasoningEngine[TIntent]
 	Validator           Validator[TIntent]
@@ -69,8 +67,10 @@ type Runner[TIntent any] struct {
 	Sink                EventSink
 }
 
+// FeedbackFormatter formats a validation/execution error into prompt feedback.
 type FeedbackFormatter func(error) string
 
+// Result is the outcome of one Run.
 type Result[TIntent any] struct {
 	Reasoning   llm.ReasoningResult[TIntent]
 	Observation llm.Observation
@@ -175,10 +175,8 @@ func (r Runner[TIntent]) emit(ctx context.Context, event llm.CycleEvent) error {
 	return r.Sink.Emit(ctx, event)
 }
 
-// runTool routes one tool call to its handler and wraps the outcome as a
-// tool-result event. An unknown tool name or a handler error becomes
-// feedback content the model can recover from on the next turn; it never
-// aborts the loop.
+// runTool routes one tool call to its handler. An unknown name or handler
+// error becomes feedback the model can recover from; it never aborts the loop.
 func (r Runner[TIntent]) runTool(ctx context.Context, call llm.ToolCall) llm.CycleEvent {
 	handler, ok := r.Tools[call.Name]
 	if !ok {
@@ -234,11 +232,8 @@ func modelOutputEvent[TIntent any](reasoning llm.ReasoningResult[TIntent]) llm.C
 	}
 }
 
-// formatIntent renders a proposed intent for a model_output event. JSON
-// keeps the rendering deterministic and readable across intent types --
-// including a discriminated-union intent whose %#v would expose
-// non-deterministic pointer addresses. It falls back to %#v only for an
-// intent that cannot be marshalled.
+// JSON keeps formatIntent deterministic; %#v on a union with pointers would
+// expose non-deterministic addresses.
 func formatIntent[TIntent any](intent TIntent) string {
 	if b, err := json.Marshal(intent); err == nil {
 		return string(b)

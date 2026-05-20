@@ -12,10 +12,7 @@ import (
 	"github.com/flarexio/stoa/persistence/postgres/pgstore"
 )
 
-// These tests cover the pure mapping helpers between pgstore rows and
-// accounting domain types. Driving real Postgres is out of scope for the
-// unit suite per the PR plan; integration is exercised manually against a
-// local Postgres.
+// Pure pgstore<->accounting mapping helpers; real Postgres integration is run manually.
 
 func TestAccountFromRow(t *testing.T) {
 	got := accountFromRow(pgstore.Account{

@@ -6,36 +6,22 @@ import (
 	"strings"
 )
 
-// AccountFilter narrows the chart of accounts for a query. The zero filter
-// matches every account in the chart.
-//
-//   - NameContains is a case-insensitive substring matched against both the
-//     account name and the account code.
-//   - Type, when non-empty, restricts the result to one account type.
-//   - ActiveOnly drops inactive accounts.
+// AccountFilter narrows the chart of accounts for a FindAccounts query.
+// NameContains matches name and code case-insensitively; the zero filter
+// matches every account.
 type AccountFilter struct {
 	NameContains string
 	Type         AccountType
 	ActiveOnly   bool
 }
 
-// AccountLister is the narrow read access FindAccounts needs over a chart
-// of accounts. LedgerRepository satisfies it, so callers pass the
-// repository they already hold.
+// AccountLister is the narrow read access FindAccounts needs;
+// LedgerRepository satisfies it.
 type AccountLister interface {
 	Accounts(ctx context.Context) ([]Account, error)
 }
 
-// FindAccounts returns the accounts in repo's chart that match filter,
-// ordered by code. It is a read-only query and never mutates the
-// repository.
-//
-// It exists so an agent can look up the codes it needs instead of being
-// handed the whole chart of accounts in its prompt; the bookkeeping tool
-// layer wraps it as a model-callable tool. Matching the chart against the
-// filter happens in memory -- the repository load is the same Accounts call
-// the prompt renderer already makes -- so no persistence adapter has to
-// grow a query method.
+// FindAccounts returns the accounts in repo's chart that match filter, ordered by code.
 func FindAccounts(ctx context.Context, repo AccountLister, filter AccountFilter) ([]Account, error) {
 	all, err := repo.Accounts(ctx)
 	if err != nil {

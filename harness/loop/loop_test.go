@@ -231,8 +231,6 @@ func TestRunnerRequiresPorts(t *testing.T) {
 	}
 }
 
-// --- EventSink tests ---
-
 type recordingSink struct {
 	events []llm.CycleEvent
 }
@@ -313,8 +311,7 @@ func TestEventSinkReceivesValidationErrors(t *testing.T) {
 	if result.Turns != 2 {
 		t.Fatalf("turns = %d, want 2", result.Turns)
 	}
-	// Turn 1: model_output, validation_error
-	// Turn 2: model_output, observation
+	// turn 1: model_output + validation_error; turn 2: model_output + observation
 	if len(sink.events) != 4 {
 		t.Fatalf("sink events = %d, want 4", len(sink.events))
 	}
@@ -363,8 +360,7 @@ func TestEventSinkReceivesExecutionErrors(t *testing.T) {
 	if result.Turns != 2 {
 		t.Fatalf("turns = %d, want 2", result.Turns)
 	}
-	// Turn 1: model_output, execution_error
-	// Turn 2: model_output, observation
+	// turn 1: model_output + execution_error; turn 2: model_output + observation
 	if len(sink.events) != 4 {
 		t.Fatalf("sink events = %d, want 4", len(sink.events))
 	}
@@ -397,7 +393,6 @@ func TestEventSinkErrorPropagates(t *testing.T) {
 		},
 	}
 
-	// Sink will fail after 1 event (the first model_output).
 	sink := &errorSink{errAfter: 1}
 	runner := Runner[testIntent]{
 		Engine: engine,
@@ -436,7 +431,7 @@ func TestContextCancellationAbortsLoop(t *testing.T) {
 		Engine: engine,
 		Validator: ValidatorFunc[testIntent](func(_ context.Context, intent testIntent) error {
 			if intent.Action == "delete" {
-				cancel() // cancel context on first invalid intent
+				cancel()
 				return errors.New("unsupported action")
 			}
 			return nil
@@ -452,8 +447,6 @@ func TestContextCancellationAbortsLoop(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error from cancelled context, got nil")
 	}
-	// Should have emitted model_output and validation_error before the
-	// cancellation took effect on the next Predict call.
 	if len(sink.events) < 2 {
 		t.Fatalf("sink events = %d, want at least 2", len(sink.events))
 	}
@@ -522,8 +515,7 @@ func TestRunnerRunsToolThenIntent(t *testing.T) {
 }
 
 func TestRunnerUnknownToolFeedsBackAndContinues(t *testing.T) {
-	// No Tools registered: an unknown tool call must feed back as
-	// recoverable content, not abort the loop.
+	// no Tools registered: unknown tool call must feed back, not abort.
 	engine := &fakeEngine{
 		results: []llm.ReasoningResult[testIntent]{
 			{Rationale: "try a tool", ToolCalls: []llm.ToolCall{{Name: "nope"}}},

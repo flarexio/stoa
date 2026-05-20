@@ -2,9 +2,7 @@ package bookkeeping
 
 import "github.com/flarexio/stoa/accounting"
 
-// IntentKind tags which bookkeeping use case an intent selects. The
-// reasoning model emits it as the "kind" field and the Registry routes on
-// it, so the set of kinds is the agent's whole vocabulary.
+// IntentKind tags which bookkeeping use case an Intent selects.
 type IntentKind string
 
 const (
@@ -12,38 +10,27 @@ const (
 	IntentReverseJournal IntentKind = "reverse_journal"
 )
 
-// Intent is the discriminated union the bookkeeping agent's
-// model emits. Kind names the use case to run; the payload field matching
-// Kind carries its typed arguments. Exactly one payload is read -- the one
-// Kind selects -- and any others are ignored.
-//
-// Modelling the agent's whole vocabulary as one type lets a single harness
-// loop, generic over Intent, route to many use cases: the loop
-// validates and executes a Intent without ever learning the
-// union has variants, and the Registry does the dumb dispatch on Kind.
+// Intent is the discriminated union the agent's model emits. Kind names the
+// use case to run; the payload field matching Kind carries its typed
+// arguments, and any others are ignored.
 type Intent struct {
 	Kind    IntentKind                `json:"kind"`
 	Post    *accounting.JournalIntent `json:"post_journal,omitempty"`
 	Reverse *ReverseIntent            `json:"reverse_journal,omitempty"`
 }
 
-// ReverseIntent is the payload of a reverse_journal intent: the ID of the
-// posted entry to reverse, plus an optional human reason recorded in the
-// reversing entry's description for the audit trail.
+// ReverseIntent is the payload of a reverse_journal Intent.
 type ReverseIntent struct {
 	EntryID string `json:"entry_id"`
 	Reason  string `json:"reason,omitempty"`
 }
 
-// IntentDescriptor is the prompt-facing description of one intent
-// variant: enough for the agent to tell the model the intent exists and
-// how to shape its arguments. Intents returns the full set, so the agent
-// builds the model's intent menu from the same vocabulary the Registry
-// routes -- the prompt and the dispatch cannot drift.
+// IntentDescriptor is the prompt-facing description of one Intent variant, so
+// the prompt and the Registry never drift.
 type IntentDescriptor struct {
-	Kind      IntentKind // value of the "kind" field that selects this intent
-	Summary   string     // one line: what the intent does and when to use it
-	ArgsShape string     // JSON skeleton of the payload object
+	Kind      IntentKind
+	Summary   string
+	ArgsShape string // JSON skeleton of the payload object
 }
 
 const (
@@ -52,10 +39,9 @@ const (
 	reverseJournalArgsShape = `{"entry_id":"<JE-id of the posted entry to reverse>","reason":"..."}`
 )
 
-// Intents returns the descriptor for every intent kind, ordered by Kind.
-// It is the single source of the agent's vocabulary: the prompt renders
-// this list and NewBookkeepingRegistry routes exactly these kinds, a
-// correspondence a registry test enforces.
+// Intents returns the descriptor for every IntentKind, ordered by Kind. It is
+// the single source of the agent's vocabulary; NewBookkeepingRegistry routes
+// exactly these kinds.
 func Intents() []IntentDescriptor {
 	return []IntentDescriptor{
 		{

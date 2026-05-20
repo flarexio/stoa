@@ -10,14 +10,9 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// Scenario is the on-disk shape of an accounting fixture. It carries the
-// company, chart of accounts, branches, and periods that seed a
-// LedgerRepository before the bookkeeper agent starts posting entries.
-//
-// Scenario intentionally does not carry journal entries: those arrive
-// through the event stream as JournalPosted, never as static fixture
-// data, so the projection is always built from the same code path in
-// tests and in production.
+// Scenario is the on-disk shape of an accounting fixture: company, chart of
+// accounts, branches, and periods that seed a LedgerRepository. It carries no
+// journal entries -- those arrive only as JournalPosted events.
 type Scenario struct {
 	Name        string    `json:"name,omitempty" yaml:"name,omitempty"`
 	Description string    `json:"description,omitempty" yaml:"description,omitempty"`
@@ -48,9 +43,7 @@ func DecodeScenario(r io.Reader) (Scenario, error) {
 	return s, nil
 }
 
-// LoadScenarioYAML reads and decodes a YAML seed file from disk. It is the
-// loader for the declarative `stoa seed` step; LoadScenarioFile stays the
-// JSON loader used by test fixtures.
+// LoadScenarioYAML reads and decodes a YAML seed file (used by `stoa seed`).
 func LoadScenarioYAML(path string) (Scenario, error) {
 	f, err := os.Open(path)
 	if err != nil {
@@ -60,8 +53,7 @@ func LoadScenarioYAML(path string) (Scenario, error) {
 	return DecodeScenarioYAML(f)
 }
 
-// DecodeScenarioYAML reads a YAML seed document from r. Unknown fields are
-// rejected, so a misspelled key fails loudly instead of being dropped.
+// DecodeScenarioYAML reads a YAML seed document from r. Unknown fields are rejected.
 func DecodeScenarioYAML(r io.Reader) (Scenario, error) {
 	var s Scenario
 	dec := yaml.NewDecoder(r)
@@ -72,9 +64,8 @@ func DecodeScenarioYAML(r io.Reader) (Scenario, error) {
 	return s, nil
 }
 
-// Seed loads the scenario's chart of accounts, branches, and periods into
-// repo through its Put* methods. Callers typically pass an empty
-// repository; Seed does not check for or merge with pre-existing state.
+// Seed upserts the scenario's chart, branches, and periods into repo through
+// its Put* methods; it does not check for or merge with existing state.
 func (s Scenario) Seed(ctx context.Context, repo LedgerRepository) error {
 	for _, a := range s.Accounts {
 		if err := repo.PutAccount(ctx, a); err != nil {

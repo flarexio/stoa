@@ -2,19 +2,15 @@ package memory
 
 import (
 	"context"
+	"maps"
 	"sync"
 
 	"github.com/flarexio/stoa/accounting"
 )
 
-// accountingRepository is the in-memory accounting.LedgerRepository
-// implementation. The name carries the domain so a future second
-// domain (e.g. inventory) can add an inventoryRepository in the same
-// package without colliding.
-//
-// All operations are safe for concurrent use. Stored entries and Lines
-// slices are cloned on the way in and on the way out so callers cannot
-// mutate the repository's state through any returned value.
+// accountingRepository is the in-memory accounting.LedgerRepository. All
+// operations are safe for concurrent use; entries and their Lines are cloned
+// in and out so callers cannot mutate stored state through a returned value.
 type accountingRepository struct {
 	mu       sync.RWMutex
 	accounts map[string]accounting.Account
@@ -25,8 +21,7 @@ type accountingRepository struct {
 	lastSeq  map[string]uint64
 }
 
-// NewAccountingRepository returns an empty in-memory
-// accounting.LedgerRepository.
+// NewAccountingRepository returns an empty in-memory accounting.LedgerRepository.
 func NewAccountingRepository() accounting.LedgerRepository {
 	return &accountingRepository{
 		accounts: make(map[string]accounting.Account),
@@ -36,8 +31,6 @@ func NewAccountingRepository() accounting.LedgerRepository {
 		lastSeq:  make(map[string]uint64),
 	}
 }
-
-// --- point reads ---
 
 func (r *accountingRepository) Account(_ context.Context, code string) (accounting.Account, bool, error) {
 	r.mu.RLock()
@@ -69,8 +62,6 @@ func (r *accountingRepository) Entry(_ context.Context, id string) (accounting.J
 	}
 	return cloneAccountingEntry(r.entries[idx]), true, nil
 }
-
-// --- listings ---
 
 func (r *accountingRepository) Accounts(_ context.Context) ([]accounting.Account, error) {
 	r.mu.RLock()
@@ -112,8 +103,6 @@ func (r *accountingRepository) Entries(_ context.Context) ([]accounting.JournalE
 	return out, nil
 }
 
-// --- seed ---
-
 func (r *accountingRepository) PutAccount(_ context.Context, a accounting.Account) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -135,12 +124,9 @@ func (r *accountingRepository) PutBranch(_ context.Context, b accounting.Branch)
 	return nil
 }
 
-// --- apply / last sequence ---
-
-// Apply records the entry carried in evt and advances LastSequence for
-// evt.Subject when evt.Sequence is higher than the previous value. Both
-// happen under the same mutex so a concurrent LastSequence reader cannot
-// observe the new entry without also observing the new sequence.
+// Apply writes the entry and advances LastSequence for evt.Subject under one
+// mutex, so a concurrent LastSequence reader cannot see the entry without
+// also seeing the new sequence.
 func (r *accountingRepository) Apply(_ context.Context, evt accounting.JournalPosted) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -159,8 +145,6 @@ func (r *accountingRepository) LastSequence(_ context.Context, subject string) (
 	return r.lastSeq[subject], nil
 }
 
-// --- internal cloning ---
-
 func cloneAccountingEntry(e accounting.JournalEntry) accounting.JournalEntry {
 	out := e
 	out.Lines = cloneAccountingLines(e.Lines)
@@ -176,9 +160,7 @@ func cloneAccountingLines(in []accounting.JournalLine) []accounting.JournalLine 
 		out[i] = l
 		if l.Dimensions.Tags != nil {
 			tags := make(map[string]string, len(l.Dimensions.Tags))
-			for k, v := range l.Dimensions.Tags {
-				tags[k] = v
-			}
+			maps.Copy(tags, l.Dimensions.Tags)
 			out[i].Dimensions.Tags = tags
 		}
 	}

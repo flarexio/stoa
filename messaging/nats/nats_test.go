@@ -32,7 +32,7 @@ func TestEncodeEvent_OmitsSubjectAndSequence(t *testing.T) {
 	evt := sampleEvent()
 	evt.Subject = "accounting.journal"
 	evt.Sequence = 42
-	evt.Entry.ID = "JE-0042" // should still be carried through since it's on Entry
+	evt.Entry.ID = "JE-0042"
 
 	body, err := encodeAccountingEvent(evt)
 	if err != nil {
@@ -55,9 +55,6 @@ func TestEncodeEvent_OmitsSubjectAndSequence(t *testing.T) {
 }
 
 func TestDecodeEvent_StampsSubjectSequenceAndCarriesEntryID(t *testing.T) {
-	// Entry.ID is producer-assigned, so it travels through the wire as
-	// part of the JSON body; decodeAccountingEvent stamps only the broker
-	// metadata (Subject + Sequence).
 	in := sampleEvent()
 	in.Entry.ID = accounting.FormatEntryID(7)
 
@@ -94,7 +91,6 @@ func TestStampPubAck_StampsSubjectSequenceWithoutTouchingEntryID(t *testing.T) {
 	if stamped.Subject != "accounting.journal" || stamped.Sequence != 99 {
 		t.Errorf("metadata not stamped: %+v", stamped)
 	}
-	// Producer-assigned ID must survive the broker round trip.
 	if stamped.Entry.ID != in.Entry.ID {
 		t.Errorf("Entry.ID: want %q (producer-assigned) got %q", in.Entry.ID, stamped.Entry.ID)
 	}

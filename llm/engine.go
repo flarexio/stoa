@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 )
 
-// ReasoningEngine is the port used by use cases to ask a model for a typed
-// intent. Concrete providers live in adapters, not in domain or use case code.
+// ReasoningEngine is the port use cases call to ask a model for a typed Intent.
+// Concrete providers live in adapters, not in domain or use-case code.
 type ReasoningEngine[TIntent any] interface {
 	Predict(ctx context.Context, input ReasoningInput) (ReasoningResult[TIntent], error)
 }
@@ -18,12 +18,12 @@ type ReasoningInput struct {
 	Events       []CycleEvent
 }
 
-// PromptRenderer turns Stoa's typed reasoning input into provider-neutral
-// messages. Provider adapters translate these messages into SDK-specific types.
+// PromptRenderer turns ReasoningInput into provider-neutral messages.
 type PromptRenderer interface {
 	Render(input ReasoningInput) ([]Message, error)
 }
 
+// PromptRendererFunc adapts a function to PromptRenderer.
 type PromptRendererFunc func(input ReasoningInput) ([]Message, error)
 
 func (f PromptRendererFunc) Render(input ReasoningInput) ([]Message, error) {
@@ -43,9 +43,7 @@ const (
 	MessageRoleAssistant MessageRole = "assistant"
 )
 
-// ReasoningResult is the structured output expected from an agent reasoning
-// step: evidence first, then an auditable rationale, then either a typed
-// intent or a set of tool calls. A turn yields one or the other -- when
+// ReasoningResult is the structured output of one reasoning step. When
 // ToolCalls is non-empty the model is asking for information before it can
 // propose a final Intent.
 type ReasoningResult[TIntent any] struct {
@@ -55,23 +53,19 @@ type ReasoningResult[TIntent any] struct {
 	ToolCalls []ToolCall    `json:"tool_calls,omitempty"`
 }
 
-// ToolCall is the model's request to invoke a named tool mid-reasoning.
-// Args is the raw JSON the model supplied; the tool handler decodes it into
-// its own typed parameters -- the same pattern Decoder uses for an intent,
-// so a tool argument stays a typed contract rather than free-form text. The
-// harness loop never inspects Args or a tool's result, which keeps the tool
-// mechanism generic across features.
+// ToolCall is the model's request to invoke a named tool. Args is the raw JSON
+// the model supplied; the tool handler decodes it.
 type ToolCall struct {
 	Name string          `json:"name"`
 	Args json.RawMessage `json:"args,omitempty"`
 }
 
-// Decoder turns a provider's raw model output into Stoa's typed result.
-// JSON is one possible implementation, not an architectural requirement.
+// Decoder turns a provider's raw model output into a typed ReasoningResult.
 type Decoder[TIntent any] interface {
 	Decode(content string) (ReasoningResult[TIntent], error)
 }
 
+// DecoderFunc adapts a function to Decoder.
 type DecoderFunc[TIntent any] func(content string) (ReasoningResult[TIntent], error)
 
 func (f DecoderFunc[TIntent]) Decode(content string) (ReasoningResult[TIntent], error) {
@@ -84,6 +78,7 @@ type EvidenceRef struct {
 	Fact   string `json:"fact"`
 }
 
+// CycleEvent is one entry in the conversation history fed back to the model.
 type CycleEvent struct {
 	Role    EventRole `json:"role"`
 	Kind    EventKind `json:"kind"`
@@ -109,16 +104,9 @@ const (
 	EventToolResult      EventKind = "tool_result"
 )
 
-// Observation is the typed result returned by executors after a valid intent is
-// acted on. Use cases can feed it back into the next cycle as an event.
+// Observation is the typed result executors return after a valid intent is
+// acted on; use cases feed it back into the next cycle as an event.
 type Observation struct {
 	Summary string            `json:"summary"`
 	Fields  map[string]string `json:"fields,omitempty"`
-}
-
-// ModelInfo provides metadata about the underlying model.
-type ModelInfo struct {
-	Name        string
-	MaxTokens   int
-	Temperature float32
 }

@@ -20,7 +20,6 @@ func (f fakeEngineFunc) Predict(ctx context.Context, input llm.ReasoningInput) (
 	return f(ctx, input)
 }
 
-// awsBillRepo seeds an in-memory repository from the testdata fixture.
 func awsBillRepo(t *testing.T) accounting.LedgerRepository {
 	t.Helper()
 	scenario, err := accounting.LoadScenarioFile("../../testdata/accounting/aws_bill.json")
@@ -34,9 +33,6 @@ func awsBillRepo(t *testing.T) accounting.LedgerRepository {
 	return repo
 }
 
-// awsBillScenario returns the scenario alongside a seeded repository so
-// tests that need scenario.Company (the prompt renderer tests) do not
-// have to reload the file.
 func awsBillScenario(t *testing.T) (accounting.Scenario, accounting.LedgerRepository) {
 	t.Helper()
 	scenario, err := accounting.LoadScenarioFile("../../testdata/accounting/aws_bill.json")
@@ -50,9 +46,6 @@ func awsBillScenario(t *testing.T) (accounting.Scenario, accounting.LedgerReposi
 	return scenario, repo
 }
 
-// wireBus subscribes the standard apply handler so the bus's published
-// events land in the repo's projection. Returned as a convenience for
-// test setup.
 func wireBus(t *testing.T, repo accounting.LedgerRepository) bookkeeping.EventBus {
 	t.Helper()
 	bus := inproc.NewAccountingBus()
@@ -77,8 +70,6 @@ func balancedAWSIntent() accounting.JournalIntent {
 	}
 }
 
-// postIntent wraps a JournalIntent as the post_journal intent the fake
-// engine hands back to the agent.
 func postIntent(intent accounting.JournalIntent) bookkeeping.Intent {
 	return bookkeeping.Intent{Kind: bookkeeping.IntentPostJournal, Post: &intent}
 }
@@ -228,10 +219,6 @@ func TestAgent_SequentialIDsAcrossPosts(t *testing.T) {
 	}
 }
 
-// TestAgent_ReversesAPostedEntry drives two Book calls through one agent:
-// the first posts an entry, the second proposes a reverse_journal intent
-// for it. It proves the agent routes both commands of the union -- post
-// and reverse -- through the same registry-backed loop.
 func TestAgent_ReversesAPostedEntry(t *testing.T) {
 	ctx := context.Background()
 	repo := awsBillRepo(t)
@@ -291,7 +278,6 @@ func TestAgent_ClosedPeriodMidSessionBlocksFurtherPosts(t *testing.T) {
 		t.Fatalf("first post: %v", err)
 	}
 
-	// Close the period directly through the repository's seed path.
 	period, _, _ := repo.Period(ctx, "2026-05")
 	period.Status = accounting.PeriodClosed
 	if err := repo.PutPeriod(ctx, period); err != nil {

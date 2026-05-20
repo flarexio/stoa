@@ -72,8 +72,7 @@ func TestRunSeed_RequiresPath(t *testing.T) {
 	}
 }
 
-// TestRunSeed_BundledSeedFile applies the real seed/taiwan_ledger.yaml so a
-// malformed timestamp, CJK value, or stray key in the bundled file is caught.
+// TestRunSeed_BundledSeedFile applies the real seed/taiwan_ledger.yaml as a smoke test.
 func TestRunSeed_BundledSeedFile(t *testing.T) {
 	seedInProcessConfig(t)
 	path := filepath.Join("..", "..", "seed", "taiwan_ledger.yaml")
@@ -86,8 +85,6 @@ func TestRunSeed_BundledSeedFile(t *testing.T) {
 	}
 }
 
-// TestSeed_IdempotentUpsert applies the same seed twice to one repository and
-// checks the chart does not grow -- re-seeding converges rather than appends.
 func TestSeed_IdempotentUpsert(t *testing.T) {
 	scn, err := accounting.DecodeScenarioYAML(strings.NewReader(sampleSeed))
 	if err != nil {
