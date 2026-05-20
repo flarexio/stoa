@@ -73,11 +73,9 @@ func openBus(ctx context.Context, cfg config.Messaging) (bookkeeping.EventBus, e
 		return inproc.NewAccountingBus(), nil
 	case config.MessagingNATS:
 		bus, err := natsmsg.NewAccountingBus(ctx, natsmsg.Config{
-			URL:           cfg.NATS.URL,
-			Stream:        cfg.NATS.Stream,
-			Subject:       cfg.NATS.Subject,
-			StreamSubject: cfg.NATS.StreamSubject,
-			Consumer:      cfg.NATS.Consumer,
+			URL:      cfg.NATS.URL,
+			Stream:   cfg.NATS.Stream,
+			Consumer: cfg.NATS.Consumer,
 		})
 		if err != nil {
 			return nil, fmt.Errorf("book-run: nats: %w", err)

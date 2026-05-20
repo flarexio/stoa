@@ -84,15 +84,29 @@ func TestLoad_PostgresRequiresDSN(t *testing.T) {
 	}
 }
 
-func TestLoad_NATSRequiresURLStreamSubject(t *testing.T) {
+func TestLoad_NATSRequiresURLStreamConsumer(t *testing.T) {
 	path := writeConfig(t, "messaging:\n  kind: nats\n")
 	_, err := config.Load(path)
 	if err == nil {
 		t.Fatal("expected error when nats block is empty")
 	}
-	for _, want := range []string{"messaging.nats.url", "messaging.nats.stream", "messaging.nats.subject"} {
+	for _, want := range []string{"messaging.nats.url", "messaging.nats.stream", "messaging.nats.consumer"} {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("error should mention %q, got %v", want, err)
+		}
+	}
+}
+
+func TestLoad_NATSRejectsSubjectField(t *testing.T) {
+	// Subject and stream_subject are domain constants, not config; the
+	// strict decoder must reject them so a stale config fails loudly.
+	for _, body := range []string{
+		"messaging:\n  kind: nats\n  nats:\n    subject: accounting.journal\n",
+		"messaging:\n  kind: nats\n  nats:\n    stream_subject: accounting.>\n",
+	} {
+		path := writeConfig(t, body)
+		if _, err := config.Load(path); err == nil {
+			t.Errorf("expected error for legacy subject field in %q", body)
 		}
 	}
 }
@@ -129,7 +143,6 @@ messaging:
   nats:
     url: nats://localhost:4222
     stream: STOA_ACCOUNTING
-    subject: accounting.journal
     consumer: stoa-book-run
 `
 	path := writeConfig(t, body)
@@ -145,48 +158,6 @@ messaging:
 	}
 	if cfg.Messaging.NATS.Consumer != "stoa-book-run" {
 		t.Errorf("consumer: got %q", cfg.Messaging.NATS.Consumer)
-	}
-}
-
-func TestLoad_NATSStreamSubjectWildcard(t *testing.T) {
-	body := `messaging:
-  kind: nats
-  nats:
-    url: nats://localhost:4222
-    stream: STOA_ACCOUNTING
-    subject: accounting.journal
-    stream_subject: accounting.>
-    consumer: stoa-book-run
-`
-	path := writeConfig(t, body)
-	cfg, err := config.Load(path)
-	if err != nil {
-		t.Fatalf("Load: %v", err)
-	}
-	if cfg.Messaging.NATS.Subject != "accounting.journal" {
-		t.Errorf("subject: got %q", cfg.Messaging.NATS.Subject)
-	}
-	if cfg.Messaging.NATS.StreamSubject != "accounting.>" {
-		t.Errorf("stream_subject: got %q", cfg.Messaging.NATS.StreamSubject)
-	}
-}
-
-func TestLoad_NATSStreamSubjectDefaultsToSubject(t *testing.T) {
-	body := `messaging:
-  kind: nats
-  nats:
-    url: nats://localhost:4222
-    stream: STOA_ACCOUNTING
-    subject: accounting.journal
-    consumer: stoa-book-run
-`
-	path := writeConfig(t, body)
-	cfg, err := config.Load(path)
-	if err != nil {
-		t.Fatalf("Load: %v", err)
-	}
-	if cfg.Messaging.NATS.StreamSubject != "accounting.journal" {
-		t.Errorf("stream_subject should default to subject, got %q", cfg.Messaging.NATS.StreamSubject)
 	}
 }
 

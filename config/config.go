@@ -71,13 +71,12 @@ type Messaging struct {
 	NATS NATS          `yaml:"nats"`
 }
 
-// NATS settings for messaging/nats. StreamSubject defaults to Subject.
+// NATS connection settings for messaging/nats. Subjects are domain constants,
+// not configurable here.
 type NATS struct {
-	URL           string `yaml:"url"`
-	Stream        string `yaml:"stream"`
-	Subject       string `yaml:"subject"`
-	StreamSubject string `yaml:"stream_subject"`
-	Consumer      string `yaml:"consumer"`
+	URL      string `yaml:"url"`
+	Stream   string `yaml:"stream"`
+	Consumer string `yaml:"consumer"`
 }
 
 // LLM defaults for the bookkeeper agent's reasoning engine; --engine / --model
@@ -118,9 +117,6 @@ func (c *Config) applyDefaults() {
 	if c.LLM.Engine == "" {
 		c.LLM.Engine = EngineScripted
 	}
-	if c.Messaging.NATS.StreamSubject == "" {
-		c.Messaging.NATS.StreamSubject = c.Messaging.NATS.Subject
-	}
 }
 
 // Validate returns a joined error of every misconfiguration found.
@@ -146,8 +142,8 @@ func (c *Config) Validate() error {
 		if c.Messaging.NATS.Stream == "" {
 			errs = append(errs, errors.New("messaging.nats.stream is required when messaging.kind is nats"))
 		}
-		if c.Messaging.NATS.Subject == "" {
-			errs = append(errs, errors.New("messaging.nats.subject is required when messaging.kind is nats"))
+		if c.Messaging.NATS.Consumer == "" {
+			errs = append(errs, errors.New("messaging.nats.consumer is required when messaging.kind is nats"))
 		}
 	default:
 		errs = append(errs, fmt.Errorf("messaging.kind %q is not supported (inproc|nats)", c.Messaging.Kind))

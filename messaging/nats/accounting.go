@@ -11,6 +11,10 @@ import (
 	"github.com/flarexio/stoa/accounting/bookkeeping"
 )
 
+// streamSubjectAccounting is the JetStream stream's binding pattern: a wildcard
+// over the accounting namespace, so future subjects need no stream reconfig.
+const streamSubjectAccounting = "accounting.>"
+
 // accountingBus is the NATS JetStream backed bookkeeping.EventBus for the
 // accounting domain. It encodes JournalPosted to JSON and translates broker
 // "wrong last sequence" into accounting.ErrConcurrentUpdate so the inproc and
@@ -21,9 +25,9 @@ type accountingBus struct {
 
 // NewAccountingBus opens NATS and returns a bookkeeping.EventBus configured for
 // accounting JournalPosted events. Close drains the consume loop and releases
-// the connection.
+// the connection. The publish subject is fixed to bookkeeping.SubjectLedger.
 func NewAccountingBus(ctx context.Context, cfg Config) (bookkeeping.EventBus, error) {
-	b, err := connect(ctx, cfg)
+	b, err := connect(ctx, cfg, bookkeeping.SubjectLedger, streamSubjectAccounting)
 	if err != nil {
 		return nil, err
 	}
