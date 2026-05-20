@@ -135,62 +135,23 @@ go run ./cmd/stoa npc-run testdata/scenarios/tavern.json --actor mira
 
 ---
 
-## 範例：記帳代理
-
-會計切片把相同架構套用到複式記帳。一個自然語言請求被轉換成具型別的意圖——模型選 `post_journal` 記一筆新分錄，或選 `reverse_journal` 沖銷一筆——再由 use-case registry 路由。`post_journal` 攜帶的是 `JournalIntent`；`reverse_journal` 攜帶的是 `ReverseIntent`，它會先解析成新的 `JournalIntent`，再交給同一套驗證器。只有平衡、期間正確、科目有效的分錄才會被過帳到帳本。
-
-```text
-記帳請求
-→ LLM 提出一個具型別意圖（post_journal 或 reverse_journal）
-→ use-case registry 路由它；accounting.Validator 執行會計不變條件
-→ 通過驗證的分錄以 JournalPosted 事件發布，並投影到帳本
-→ 驗證錯誤以具型別事件回饋以供自我修正
-```
-
-`accounting/` 擁有領域模型——科目表、會計期間、分錄和驗證規則——不依賴任何 LLM。`accounting/bookkeeping/` 擁有 `PostJournal` 與 `ReverseJournal` 操作（先驗證再執行，不需 LLM 即可呼叫）、路由它們的 `Intent` union 與 registry、以及事件傳輸 port。`post_journal` 攜帶 `JournalIntent`，而 `reverse_journal` 攜帶 `ReverseIntent`，它會先解析成 `JournalIntent` 再驗證。`accounting/agent/` 擁有代理迴圈和功能專屬的提示詞渲染器。
-
-`cmd/stoa book-run` 可從命令列跑這個迴圈；可執行的範例與設定方式見 [`docs/accounting.md`](docs/accounting.md)。
-
----
-
-## 對話式 TUI
-
-`stoa tui` 是一個建構在相同 reason → validate → execute 迴圈之上的 [Bubble Tea](https://github.com/charmbracelet/bubbletea) 終端介面。它不輸出一次性的 JSON 報告，而是把每一個循環事件——模型輸出、驗證回饋、observation——在發生當下逐步串流出來，並讓 session 保持開啟以接受後續請求。
-
-```bash
-go run ./cmd/stoa tui testdata/scenarios/tavern.json testdata/accounting/aws_bill.json
-```
-
-傳入一個或多個場景檔：會計場景成為 bookkeeper session，world 場景則為每個角色各開一個 npc session。在起始畫面選一個代理、輸入請求、看著迴圈展開，`ctrl+c` 可取消執行中的回合或離開。TUI 只負責呈現——它透過 `harness/loop.EventSink` 觀察 harness 迴圈，並重用與 `book-run` / `npc-run` 相同的組裝邏輯。
-
-Bookkeeper session 連接到一個已經 seed 過的 ledger，啟動時不會自行 seed——請先用 [`stoa seed`](seed/README.md) 建立會計科目表。場景檔裡的會計科目、分支機構與會計期間不會被 TUI 套用；以設定檔指定的儲存庫為準。
-
----
-
 ## 專案結構
 
-Stoa 依照**功能切片**組織程式碼，而不是依照架構層級。每個功能以領域套件為根，底下嵌套子套件——一個代理迴圈，以及當某個操作值得在沒有 LLM 的情況下執行時的 use-case 層——讓領域模型可以獨立被匯入，同時讓代理迴圈保持明確。
+Stoa 依照**功能切片**組織程式碼，而不是依照架構層級。每個功能以領域套件為根，底下嵌套代理子套件，讓領域模型可以獨立被匯入，同時讓代理迴圈保持明確。
 
 ```text
 stoa/
 ├── cmd/
-│   └── stoa/              # 範例 CLI（npc-run、book-run、tui 子指令）
-│       └── tui/           # Bubble Tea 對話式介面（僅負責呈現）
+│   └── stoa/              # 範例 CLI（npc-run 子指令）
 ├── world/                 # 遊戲領域：世界狀態、角色、物品、NPCIntent、驗證器
 │   └── agent/             # NPC 代理迴圈與提示詞渲染
-├── accounting/            # 會計領域：帳本、科目、期間、驗證器、事件
-│   ├── bookkeeping/       # PostJournal/ReverseJournal use case、use-case registry、事件 port
-│   └── agent/             # 記帳代理迴圈與提示詞渲染
-├── persistence/           # LedgerRepository 轉接器（memory、postgres）
-├── messaging/             # EventBus 轉接器（inproc、nats）
 ├── config/                # cmd/stoa 的 config.yaml 載入器
 ├── harness/
 │   └── loop/              # 具型別的推理、驗證、執行 runner
 ├── llm/                   # 共用推理合約與提示詞渲染
 │   └── openai/            # OpenAI 供應商轉接器
 ├── testdata/
-│   ├── scenarios/         # NPC 場景樣本（例如 tavern.json）
-│   └── accounting/        # 記帳場景樣本（例如 aws_bill.json）
+│   └── scenarios/         # NPC 場景樣本（例如 tavern.json）
 └── docs/
     └── architecture.md
 ```
@@ -222,23 +183,11 @@ go mod download
 
 ### 執行
 
-`cmd/stoa` 是一支小型 CLI，提供 `npc-run`、`book-run`、`tui` 三個子指令。先把本地 Postgres + NATS 服務拉起來，再用 [golang-migrate](https://github.com/golang-migrate/migrate) 套用資料庫 schema：
+`cmd/stoa` 是一支小型 CLI，提供 `npc-run` 子指令。可以用內建的 tavern 場景搭配 deterministic scripted engine 執行：
 
 ```bash
-docker compose up -d
-
-migrate -path persistence/postgres/migrations \
-  -database "postgres://stoa:stoa@localhost:5432/stoa?sslmode=disable" up
+go run ./cmd/stoa npc-run testdata/scenarios/tavern.json --actor mira
 ```
-
-把 `config.yaml` 指向 `postgres` 與 `nats` 後端（格式見 `config.example.yaml`），接著執行子指令：
-
-```bash
-go run ./cmd/stoa book-run testdata/accounting/aws_bill.json \
-  --request "Paid AWS bill 100 USD using company credit card"
-```
-
-改用空的 `config.yaml` 則選用全離線預設值——記憶體帳本、行程內匯流排，不需任何服務。
 
 ---
 

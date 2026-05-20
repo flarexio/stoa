@@ -1,6 +1,5 @@
-// Package config parses the YAML file that selects the stoa binary's outbound
-// adapters at boot. Read by cmd/stoa only; domain and adapter packages must
-// not import it. See config.example.yaml for the full shape.
+// Package config parses the YAML file for stoa CLI defaults. Domain packages
+// must not import it. See config.example.yaml for the full shape.
 package config
 
 import (
@@ -26,22 +25,6 @@ func DefaultDir() (string, error) {
 	return filepath.Join(home, ".flarex", "stoa"), nil
 }
 
-// PersistenceKind names the persistence backend; empty defaults to PersistenceMemory.
-type PersistenceKind string
-
-const (
-	PersistenceMemory   PersistenceKind = "memory"
-	PersistencePostgres PersistenceKind = "postgres"
-)
-
-// MessagingKind names the messaging backend; empty defaults to MessagingInproc.
-type MessagingKind string
-
-const (
-	MessagingInproc MessagingKind = "inproc"
-	MessagingNATS   MessagingKind = "nats"
-)
-
 // EngineKind names the reasoning engine; empty defaults to EngineScripted.
 type EngineKind string
 
@@ -52,34 +35,10 @@ const (
 
 // Config is the decoded representation of config.yaml.
 type Config struct {
-	Persistence Persistence `yaml:"persistence"`
-	Messaging   Messaging   `yaml:"messaging"`
-	LLM         LLM         `yaml:"llm"`
+	LLM LLM `yaml:"llm"`
 }
 
-type Persistence struct {
-	Kind     PersistenceKind `yaml:"kind"`
-	Postgres Postgres        `yaml:"postgres"`
-}
-
-type Postgres struct {
-	DSN string `yaml:"dsn"`
-}
-
-type Messaging struct {
-	Kind MessagingKind `yaml:"kind"`
-	NATS NATS          `yaml:"nats"`
-}
-
-// NATS connection settings for messaging/nats. Subjects are domain constants,
-// not configurable here.
-type NATS struct {
-	URL      string `yaml:"url"`
-	Stream   string `yaml:"stream"`
-	Consumer string `yaml:"consumer"`
-}
-
-// LLM defaults for the bookkeeper agent's reasoning engine; --engine / --model
+// LLM defaults for the reasoning engine; --engine / --model
 // CLI flags override these.
 type LLM struct {
 	Engine EngineKind `yaml:"engine"`
@@ -108,12 +67,6 @@ func Load(path string) (*Config, error) {
 }
 
 func (c *Config) applyDefaults() {
-	if c.Persistence.Kind == "" {
-		c.Persistence.Kind = PersistenceMemory
-	}
-	if c.Messaging.Kind == "" {
-		c.Messaging.Kind = MessagingInproc
-	}
 	if c.LLM.Engine == "" {
 		c.LLM.Engine = EngineScripted
 	}
@@ -122,32 +75,6 @@ func (c *Config) applyDefaults() {
 // Validate returns a joined error of every misconfiguration found.
 func (c *Config) Validate() error {
 	var errs []error
-
-	switch c.Persistence.Kind {
-	case PersistenceMemory:
-	case PersistencePostgres:
-		if c.Persistence.Postgres.DSN == "" {
-			errs = append(errs, errors.New("persistence.postgres.dsn is required when persistence.kind is postgres"))
-		}
-	default:
-		errs = append(errs, fmt.Errorf("persistence.kind %q is not supported (memory|postgres)", c.Persistence.Kind))
-	}
-
-	switch c.Messaging.Kind {
-	case MessagingInproc:
-	case MessagingNATS:
-		if c.Messaging.NATS.URL == "" {
-			errs = append(errs, errors.New("messaging.nats.url is required when messaging.kind is nats"))
-		}
-		if c.Messaging.NATS.Stream == "" {
-			errs = append(errs, errors.New("messaging.nats.stream is required when messaging.kind is nats"))
-		}
-		if c.Messaging.NATS.Consumer == "" {
-			errs = append(errs, errors.New("messaging.nats.consumer is required when messaging.kind is nats"))
-		}
-	default:
-		errs = append(errs, fmt.Errorf("messaging.kind %q is not supported (inproc|nats)", c.Messaging.Kind))
-	}
 
 	switch c.LLM.Engine {
 	case EngineScripted:

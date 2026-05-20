@@ -139,62 +139,23 @@ Use `--task` to override the in-world prompt and `--max-turns` to bound the loop
 
 ---
 
-## Example: bookkeeping agent
-
-The accounting slice applies the same architecture to double-entry bookkeeping. A natural-language request is turned into a typed intent — the model picks `post_journal` to record a new entry or `reverse_journal` to reverse one — and the use-case registry routes it. `post_journal` carries a `JournalIntent`; `reverse_journal` carries a `ReverseIntent` that resolves to a new `JournalIntent` before validation. Only a balanced, period-correct, account-valid entry is posted to the ledger.
-
-```text
-bookkeeping request
-→ LLM proposes a typed intent (post_journal or reverse_journal)
-→ the use-case registry routes it; accounting.Validator enforces the invariants
-→ a validated entry is published as a JournalPosted event and projected into the ledger
-→ validation errors feed back as typed events for self-correction
-```
-
-`accounting/` owns the domain model — chart of accounts, periods, journal entries, and validation rules — with no LLM dependency. `accounting/bookkeeping/` owns the `PostJournal` and `ReverseJournal` operations (validate-then-execute, callable without an LLM), the `Intent` union and registry that route to them, and the event-transport ports. `post_journal` carries a `JournalIntent`, while `reverse_journal` carries a `ReverseIntent` that resolves to a `JournalIntent` before validation. `accounting/agent/` owns the agent loop and the feature-specific prompt renderer.
-
-`cmd/stoa book-run` runs this loop from the command line; see [`docs/accounting.md`](docs/accounting.md) for the runnable demo and configuration.
-
----
-
-## Conversational TUI
-
-`stoa tui` is a [Bubble Tea](https://github.com/charmbracelet/bubbletea) terminal UI over the same reason → validate → execute loop. Instead of a one-shot JSON report, it streams each cycle event — model output, validation feedback, observation — as it happens, and keeps the session open for follow-up requests in the same run.
-
-```bash
-go run ./cmd/stoa tui testdata/scenarios/tavern.json testdata/accounting/aws_bill.json
-```
-
-Pass one or more scenario files: accounting scenarios become bookkeeper sessions, world scenarios become one npc session per actor. Choose an agent on the start screen, type a request, watch the loop unfold, and press `ctrl+c` to cancel a running turn or quit. The TUI is presentation only — it observes the harness loop through a `harness/loop.EventSink` and reuses the same composition as `book-run` / `npc-run`.
-
-Bookkeeper sessions connect to an already-seeded ledger and never seed on startup — populate the chart of accounts first with [`stoa seed`](seed/README.md). The accounts, branches, and periods in the scenario file are not applied by the TUI; the configured repository is the source of truth.
-
----
-
 ## Project layout
 
-Stoa organizes code **by feature**, not by architectural layer. A feature is a domain package at its root with nested subpackages — an agent loop, and a use-case layer when an operation is worth running without an LLM — so domain models remain independently importable while the agent loop stays explicit.
+Stoa organizes code **by feature**, not by architectural layer. A feature is a domain package at its root with an agent subpackage, so domain models remain independently importable while the agent loop stays explicit.
 
 ```
 stoa/
 ├── cmd/
-│   └── stoa/              # Demo CLI (npc-run, book-run, tui subcommands)
-│       └── tui/           # Bubble Tea conversational UI (presentation only)
+│   └── stoa/              # Demo CLI (npc-run subcommand)
 ├── world/                 # Game domain: world state, actors, items, NPCIntent, validator
 │   └── agent/             # NPC agent loop and prompt rendering
-├── accounting/            # Accounting domain: ledger, accounts, periods, validator, events
-│   ├── bookkeeping/       # PostJournal/ReverseJournal use cases, use-case registry, event ports
-│   └── agent/             # Bookkeeping agent loop and prompt rendering
-├── persistence/           # LedgerRepository adapters (memory, postgres)
-├── messaging/             # EventBus adapters (inproc, nats)
 ├── config/                # config.yaml loader for cmd/stoa
 ├── harness/
 │   └── loop/              # Typed reason-validate-execute runner
 ├── llm/                   # Shared reasoning contracts and prompt rendering
 │   └── openai/            # OpenAI provider adapter
 ├── testdata/
-│   ├── scenarios/         # NPC scenario fixtures (e.g. tavern.json)
-│   └── accounting/        # Bookkeeping scenario fixtures (e.g. aws_bill.json)
+│   └── scenarios/         # NPC scenario fixtures (e.g. tavern.json)
 └── docs/
     └── architecture.md
 ```
@@ -226,23 +187,11 @@ go mod download
 
 ### Run
 
-`cmd/stoa` is a small CLI with `npc-run`, `book-run`, and `tui` subcommands. Bring up the local Postgres + NATS stack and apply the schema with [golang-migrate](https://github.com/golang-migrate/migrate):
+`cmd/stoa` is a small CLI with an `npc-run` subcommand. Run the bundled tavern scenario with the deterministic scripted engine:
 
 ```bash
-docker compose up -d
-
-migrate -path persistence/postgres/migrations \
-  -database "postgres://stoa:stoa@localhost:5432/stoa?sslmode=disable" up
+go run ./cmd/stoa npc-run testdata/scenarios/tavern.json --actor mira
 ```
-
-Point `config.yaml` at the `postgres` and `nats` backends — see `config.example.yaml` — then run a subcommand:
-
-```bash
-go run ./cmd/stoa book-run testdata/accounting/aws_bill.json \
-  --request "Paid AWS bill 100 USD using company credit card"
-```
-
-An empty `config.yaml` instead selects the all-offline defaults — in-memory ledger, in-process bus, no services needed.
 
 ---
 

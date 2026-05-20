@@ -26,9 +26,6 @@ func newApp(stdout, stderr io.Writer) *cli.Command {
 		ErrWriter: stderr,
 		Commands: []*cli.Command{
 			newNPCRunCommand(stdout),
-			newBookRunCommand(stdout),
-			newSeedCommand(stdout),
-			newTUICommand(),
 		},
 	}
 }

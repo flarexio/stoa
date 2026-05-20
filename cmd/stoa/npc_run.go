@@ -106,3 +106,14 @@ func runNPC(ctx context.Context, c *cli.Command, stdout io.Writer) error {
 	}
 	return runErr
 }
+
+// extractFeedback collects validation/execution-error content for the CLI report.
+func extractFeedback(events []llm.CycleEvent) []string {
+	var feedback []string
+	for _, e := range events {
+		if e.Kind == llm.EventValidationError || e.Kind == llm.EventExecutionError {
+			feedback = append(feedback, e.Content)
+		}
+	}
+	return feedback
+}
