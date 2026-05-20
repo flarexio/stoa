@@ -145,7 +145,7 @@ stoa/
 │   └── stoa/              # 範例 CLI（npc-run 子指令）
 ├── world/                 # 遊戲領域：世界狀態、角色、物品、NPCIntent、驗證器
 │   └── agent/             # NPC 代理迴圈與提示詞渲染
-├── config/                # cmd/stoa 的 config.yaml 載入器
+├── config/                # CLI/供應商選擇使用的共用設定型別
 ├── harness/
 │   └── loop/              # 具型別的推理、驗證、執行 runner
 ├── llm/                   # 共用推理合約與提示詞渲染
