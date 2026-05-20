@@ -5,6 +5,14 @@ import (
 	"encoding/json"
 )
 
+// EngineKind names a reasoning engine implementation; empty defaults to EngineScripted.
+type EngineKind string
+
+const (
+	EngineScripted EngineKind = "scripted"
+	EngineOpenAI   EngineKind = "openai"
+)
+
 // ReasoningEngine is the port use cases call to ask a model for a typed Intent.
 // Concrete providers live in adapters, not in domain or use-case code.
 type ReasoningEngine[TIntent any] interface {
