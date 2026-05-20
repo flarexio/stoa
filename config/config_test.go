@@ -171,7 +171,6 @@ func TestLoad_MissingFile(t *testing.T) {
 func TestDefaultDir(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
-	t.Setenv("USERPROFILE", home)
 	got, err := config.DefaultDir()
 	if err != nil {
 		t.Fatalf("DefaultDir: %v", err)

@@ -26,7 +26,6 @@ func seedConfigBody(t *testing.T, body string) {
 	t.Helper()
 	home := t.TempDir()
 	t.Setenv("HOME", home)
-	t.Setenv("USERPROFILE", home)
 	dir := filepath.Join(home, ".flarex", "stoa")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatalf("mkdir default config dir: %v", err)
@@ -48,7 +47,6 @@ func isolateHome(t *testing.T) string {
 	t.Helper()
 	home := t.TempDir()
 	t.Setenv("HOME", home)
-	t.Setenv("USERPROFILE", home)
 	return home
 }
 
