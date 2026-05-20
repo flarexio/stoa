@@ -65,7 +65,6 @@ stoa/
     handoff/            # (reserved) shared handoff envelopes
   llm/                  # Reasoning engine and message contracts
   llm/<provider>/       # Provider adapters (e.g. llm/openai)
-  config/               # Shared config types for CLI/provider selection
   cmd/                  # Executable entry points
     stoa/               #   Demo CLI: npc-run subcommand
   testdata/             # Scenario fixtures

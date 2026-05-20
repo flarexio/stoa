@@ -149,7 +149,6 @@ stoa/
 │   └── stoa/              # Demo CLI (npc-run subcommand)
 ├── world/                 # Game domain: world state, actors, items, NPCIntent, validator
 │   └── agent/             # NPC agent loop and prompt rendering
-├── config/                # Shared config types for CLI/provider selection
 ├── harness/
 │   └── loop/              # Typed reason-validate-execute runner
 ├── llm/                   # Shared reasoning contracts and prompt rendering
