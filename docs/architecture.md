@@ -45,7 +45,7 @@ Dependencies point inward. Runtime calls can cross outward through interfaces, b
 
 ## Feature Slice Layout
 
-Each feature is a domain package at the feature root with nested subpackages for the layers that operate on it: an `agent/` subpackage for the LLM-driven loop and, when the feature has application operations worth running without an LLM, a use-case subpackage between them, named for the operations it holds (e.g. `accounting/bookkeeping/`). The split keeps domain types independently importable so other agents, handoff receivers, or offline batch validators can consume them without pulling any LLM code, and keeps each use case callable by a REST handler or a batch job, not only by the agent.
+Each feature is a domain package at the feature root with nested subpackages for the layers that operate on it. The current slice uses an `agent/` subpackage for the LLM-driven loop. The split keeps domain types independently importable so other agents, handoff receivers, or offline batch validators can consume them without pulling any LLM code.
 
 ```text
 stoa/
@@ -54,29 +54,11 @@ stoa/
     <port>.go           # Domain port interface(s); ports are stdlib-only
     event.go            # Typed domain events when the feature is event-driven
     <domain>_test.go
-    <usecase>/          # Application operations on <domain> (e.g. bookkeeping/); no LLM dependency
-      <usecase>.go      # A validate + execute operation callable without an LLM
-      eventbus.go       # Transport ports (EventPublisher/Subscriber/Bus) when event-driven
-      <usecase>_test.go
-    agent/              # The LLM-driven loop that drives the use cases
-      agent.go          # Orchestration (imports <domain>, <domain>/<usecase>, llm, harness/loop)
+    agent/              # The LLM-driven loop
+      agent.go          # Orchestration (imports <domain>, llm, harness/loop)
       prompt.go         # Feature-specific provider-neutral PromptRenderer
       agent_test.go
       integration_test.go
-  persistence/
-    memory/             # In-memory repositories (test + dev default)
-      memory.go         #   Package doc + any cross-domain helpers
-      accounting.go     #   NewAccountingRepository factory
-    <backend>/          # Production repositories (e.g. persistence/postgres)
-      <backend>.go      #   Generic plumbing (pool, migrations, codec)
-      accounting.go     #   NewAccountingRepository factory
-  messaging/
-    inproc/             # In-process EventBus (test + dev default)
-      bus.go            #   Package doc
-      accounting.go     #   NewAccountingBus factory
-    <transport>/        # Production transports (e.g. messaging/nats)
-      <transport>.go    #   Generic transport (connection, publish, drain)
-      accounting.go     #   NewAccountingBus factory + domain codec
   harness/
     loop/               # Typed reason-validate-execute runner
     retry/              # (reserved) retry and circuit-breaker mechanics
@@ -85,23 +67,14 @@ stoa/
   llm/<provider>/       # Provider adapters (e.g. llm/openai)
   config/               # config.yaml loader (cmd/stoa only)
   cmd/                  # Executable entry points
-    stoa/               #   Demo CLI: npc-run, book-run, tui subcommands
-      tui/              #   Bubble Tea conversational UI (presentation only)
-  testdata/             # Scenario and accounting fixtures
+    stoa/               #   Demo CLI: npc-run subcommand
+  testdata/             # Scenario fixtures
   docs/
 ```
 
-Example: `accounting/` defines the ledger domain -- `Account`, `Period`, `JournalEntry`, `JournalIntent`, the `Validator`, and the `LedgerRepository` port. `accounting/bookkeeping/` holds the application operations -- `PostJournal` and `ReverseJournal`, each validate-then-execute and callable without an LLM -- the `Intent` discriminated union and `Registry` that route to them, and the transport ports (`EventPublisher`, `EventBus`) they publish through. `post_journal` carries a `JournalIntent`, while `reverse_journal` carries a `ReverseIntent` that resolves to a `JournalIntent` before validation. `accounting/agent/` is the agent that drives one harness loop over `bookkeeping.Intent`, letting the model pick an intent per turn, and renders the bookkeeping prompt. The OpenAI wiring happens at the composition edge, where `accounting/agent`'s prompt renderer is passed into `llm/openai`. `accounting/` imports neither `accounting/bookkeeping/`, `accounting/agent/`, nor `llm/`. The `world/` + `world/agent/` pair is a second feature slice with the same shape, minus the `bookkeeping/` package its simpler flow does not yet need.
+Example: `world/` defines the game domain -- actors, items, locations, NPC intents, and the validator. `world/agent/` drives one harness loop over `world.NPCIntent`, renders the NPC prompt, and feeds validation or execution errors back as typed events. The OpenAI wiring happens at the composition edge, where the prompt renderer is passed into `llm/openai`. `world/` imports neither `world/agent/` nor `llm/`.
 
-Outbound adapters -- persistence implementations, message-bus transports, HTTP clients, anything that pulls in an external SDK or network dependency -- do not live under the domain package. They go in the top-level `persistence/` and `messaging/` trees (or their own peer tree for a new category), each adapter in its own subpackage that imports the domain it implements but is not imported by it. For example, `accounting.LedgerRepository` is satisfied by `persistence/memory` (in-process default) and `persistence/postgres` (production, sqlc + pgx/v5); `bookkeeping.EventBus` (Publish + Subscribe + Close, defined in the use-case layer because event delivery is orchestration rather than a business rule) is satisfied by `messaging/inproc` (in-process default) and `messaging/nats` (production, JetStream with `Nats-Expected-Last-Subject-Sequence` for optimistic concurrency). Both adapters return the interface from their constructors -- callers depend only on the abstraction. The composition edge -- `cmd/stoa` plus the `config` package -- picks which pair to wire at boot from a `config.yaml` (read from the stoa work directory selected by `--work-dir`, defaulting to `~/.flarex/stoa`; the file is required, no implicit in-process fallback). The domain remains stdlib-only. The `stoa tui` subcommand is a third front-end at this same composition edge: it builds agents from `cmd/stoa`'s composition helpers, observes the loop through a `harness/loop.EventSink`, and confines the Bubble Tea dependency to `cmd/stoa/tui`.
-
-Trivial in-process defaults that exist only to make ports usable without infrastructure (an in-memory map satisfying a repository port, a synchronous fan-out satisfying a publisher port) still live in the outbound tree, not in the domain root -- this keeps `go doc <domain>` focused on entities, invariants, and ports, and gives every adapter the same shape regardless of how heavy it is.
-
-### Adapter convention: one file per domain
-
-Each adapter package (`messaging/inproc`, `messaging/nats`, `persistence/memory`, `persistence/postgres`) follows the same two-file convention: a generic core file containing transport-level plumbing that imports no domain package, plus one `<domain>.go` file per domain that ships the typed factory function `New{Domain}{Port}(...) → domain.Port`. Concrete adapter structs stay unexported -- the only thing crossing the package boundary is the factory function returning the port interface, so cmd-time wiring never depends on the concrete type. When a second domain needs the same transport, it adds a sibling `{domain}.go` file rather than touching the core or any existing factory.
-
-For genuinely thin adapters (`messaging/inproc`, `persistence/memory`), the "generic core" is just a package doc -- the in-process implementations are small enough that sharing infrastructure would cost more than it saves; each domain file owns its own state. For heavier adapters (`messaging/nats`, `persistence/postgres`), the core file holds the genuinely-shared plumbing: NATS connection / stream / consumer / drain lifecycle in the former, pgxpool plumbing in the latter.
+Outbound adapters -- HTTP clients, persistence implementations, message-bus transports, anything that pulls in an external SDK or network dependency -- do not live under the domain package. They belong in peer infrastructure trees or at the composition edge, each adapter importing the domain it implements but never being imported by it. The domain remains stdlib-only.
 
 Feature-based organization does not mean dependency rules disappear. The direction still flows inward through interfaces: the agent depends on domain, never the reverse. Cross-feature contracts, such as `llm.ReasoningEngine[TIntent]`, may live in shared packages when they are intentionally reusable across agents.
 
@@ -112,7 +85,7 @@ Every agent follows the same cycle:
 1. **Reason with evidence.** The LLM explains which supplied facts support its proposed intent.
 2. **Emit a typed intent, or call tools.** The model outputs a typed intent, not an action. When it needs more information first, it returns tool calls instead; the loop runs each through a feature-provided handler, feeds the results back as typed events, and reasons again. A tool result is a starting point, not authority -- the validator below still has the final say.
 3. **Validate in domain code.** Pure Go rules decide whether the intent is allowed.
-4. **Execute through a port.** Use cases call an interface; infrastructure implements it. In the bookkeeping example, a validated intent is published as a `JournalPosted` event through the `bookkeeping.EventBus` port.
+4. **Execute through a port.** Use cases call an interface; infrastructure implements it. In the NPC demo, a validated intent is executed by code that observes or mutates the world state.
 5. **Feed back observations or errors.** Validation and execution results become typed context for the next cycle.
 
 ```mermaid
@@ -148,7 +121,7 @@ sequenceDiagram
     end
 ```
 
-The important boundary is that the use case depends on `ReasoningEngine` and `Executor`-style interfaces, not on concrete SDKs or tool clients. A feature may also call domain ports directly when the port is itself a business concept, such as `accounting.LedgerRepository`.
+The important boundary is that the use case depends on `ReasoningEngine` and `Executor`-style interfaces, not on concrete SDKs or tool clients. A feature may also call domain ports directly when the port is itself a business concept.
 
 ## Ports, Not Infrastructure Dependencies
 

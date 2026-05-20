@@ -1,8 +1,7 @@
 # Code Review Guidelines (Root)
 
 Global guidelines for Claude Code when reviewing changes in this repository.
-Subdirectory `REVIEW.md` files (e.g. `persistence/postgres/REVIEW.md`) add
-scoped rules on top of these.
+Subdirectory `REVIEW.md` files may add scoped rules on top of these.
 
 ## Read first
 
@@ -38,8 +37,7 @@ checklist of things easy to miss in a PR.
 - **Public contract changes without callers updated.** Touching
   `llm.ReasoningEngine`, `llm.PromptRenderer`, `llm.Decoder`, or
   `harness/loop.Runner` requires the same PR to update every agent
-  package that consumes it (`accounting/agent/`, `world/agent/`), `llm/openai/`, and
-  tests.
+  package that consumes it (`world/agent/`), `llm/openai/`, and tests.
 - **Domain rule changes without tests.** New or relaxed validation rules
   that ship without both a passing and a failing test case.
 - **Comment bloat.** Multi-paragraph essays above a function, docs that
