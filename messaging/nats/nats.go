@@ -3,7 +3,9 @@
 // and optimistic-concurrency semantics (Nats-Expected-Last-Subject-Sequence).
 //
 // One file per domain (e.g. accounting.go); this file holds the connection,
-// stream, consumer, and drain plumbing shared across domains.
+// stream, consumer, and drain plumbing shared across domains. Subjects and
+// stream-subject patterns are domain decisions and live in the per-domain
+// factory, not in Config.
 package nats
 
 import (
@@ -20,18 +22,13 @@ import (
 // defaultAckWait mirrors JetStream's own default.
 const defaultAckWait = 30 * time.Second
 
-// Config carries the connection and JetStream settings. URL, Stream, Subject,
-// and Consumer are required; AckWait defaults to 30s when zero. Subject is the
-// concrete subject the bus publishes to and the consumer filters on;
-// StreamSubject is the pattern the stream is bound to (e.g. "accounting.>")
-// and defaults to Subject when empty.
+// Config carries the user-supplied connection and JetStream settings. URL,
+// Stream, and Consumer are required; AckWait defaults to 30s when zero.
 type Config struct {
-	URL           string
-	Stream        string
-	Subject       string
-	StreamSubject string
-	Consumer      string
-	AckWait       time.Duration
+	URL      string
+	Stream   string
+	Consumer string
+	AckWait  time.Duration
 }
 
 // bus owns the NATS connection, JetStream context, consumer, and consume loop.
@@ -47,19 +44,19 @@ type bus struct {
 	consume jetstream.ConsumeContext
 }
 
-// connect opens NATS, attaches JetStream, and ensures the stream and durable
-// consumer named in cfg exist before returning.
-func connect(ctx context.Context, cfg Config) (*bus, error) {
-	if cfg.URL == "" || cfg.Stream == "" || cfg.Subject == "" || cfg.Consumer == "" {
-		return nil, errors.New("nats: url, stream, subject, and consumer are required")
+// connect opens NATS, attaches JetStream, and ensures the stream (bound to
+// streamSubject) and durable consumer (filtering on subject) named in cfg
+// exist before returning.
+func connect(ctx context.Context, cfg Config, subject, streamSubject string) (*bus, error) {
+	if cfg.URL == "" || cfg.Stream == "" || cfg.Consumer == "" {
+		return nil, errors.New("nats: url, stream, and consumer are required")
+	}
+	if subject == "" || streamSubject == "" {
+		return nil, errors.New("nats: subject and stream subject are required")
 	}
 	ackWait := cfg.AckWait
 	if ackWait <= 0 {
 		ackWait = defaultAckWait
-	}
-	streamSubject := cfg.StreamSubject
-	if streamSubject == "" {
-		streamSubject = cfg.Subject
 	}
 	nc, err := nats.Connect(cfg.URL)
 	if err != nil {
@@ -81,7 +78,7 @@ func connect(ctx context.Context, cfg Config) (*bus, error) {
 	}
 	cons, err := js.CreateOrUpdateConsumer(ctx, cfg.Stream, jetstream.ConsumerConfig{
 		Durable:       cfg.Consumer,
-		FilterSubject: cfg.Subject,
+		FilterSubject: subject,
 		AckPolicy:     jetstream.AckExplicitPolicy,
 		DeliverPolicy: jetstream.DeliverAllPolicy,
 		AckWait:       ackWait,
@@ -93,7 +90,7 @@ func connect(ctx context.Context, cfg Config) (*bus, error) {
 	return &bus{
 		nc:       nc,
 		js:       js,
-		subject:  cfg.Subject,
+		subject:  subject,
 		consumer: cons,
 		ackWait:  ackWait,
 	}, nil
