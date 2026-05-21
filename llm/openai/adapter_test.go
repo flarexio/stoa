@@ -110,6 +110,86 @@ func TestMessagesMapEnvironmentFeedbackToUserContext(t *testing.T) {
 	}
 }
 
+func TestNewAdapterAPIKeyFromEnv(t *testing.T) {
+	t.Setenv("OPENAI_API_KEY", "env-api-key")
+	t.Setenv("OPENAI_BASE_URL", "")
+
+	adapter, err := NewAdapter(Config[testIntent]{Model: "gpt-5.4-mini"})
+	if err != nil {
+		t.Fatalf("NewAdapter returned error: %v", err)
+	}
+	if adapter.model != "gpt-5.4-mini" {
+		t.Fatalf("model = %q, want gpt-5.4-mini", adapter.model)
+	}
+}
+
+func TestNewAdapterAPIKeyExplicitOverridesEnv(t *testing.T) {
+	t.Setenv("OPENAI_API_KEY", "env-key")
+
+	adapter, err := NewAdapter(Config[testIntent]{APIKey: "explicit-key", Model: "gpt-5.4-mini"})
+	if err != nil {
+		t.Fatalf("NewAdapter returned error: %v", err)
+	}
+	if adapter.model != "gpt-5.4-mini" {
+		t.Fatalf("model = %q, want gpt-5.4-mini", adapter.model)
+	}
+}
+
+func TestNewAdapterBaseURLExplicit(t *testing.T) {
+	t.Setenv("OPENAI_API_KEY", "")
+	t.Setenv("OPENAI_BASE_URL", "")
+
+	adapter, err := NewAdapter(Config[testIntent]{
+		APIKey:  "test-key",
+		Model:   "gpt-5.4-mini",
+		BaseURL: "https://api.openai.com/v1",
+	})
+	if err != nil {
+		t.Fatalf("NewAdapter returned error: %v", err)
+	}
+	if adapter.model != "gpt-5.4-mini" {
+		t.Fatalf("model = %q, want gpt-5.4-mini", adapter.model)
+	}
+}
+
+func TestNewAdapterBaseURLFromEnv(t *testing.T) {
+	t.Setenv("OPENAI_API_KEY", "test-key")
+	t.Setenv("OPENAI_BASE_URL", "https://custom-llm.example.com/v1")
+
+	adapter, err := NewAdapter(Config[testIntent]{Model: "gpt-5.4-mini"})
+	if err != nil {
+		t.Fatalf("NewAdapter returned error: %v", err)
+	}
+	if adapter.model != "gpt-5.4-mini" {
+		t.Fatalf("model = %q, want gpt-5.4-mini", adapter.model)
+	}
+}
+
+func TestNewAdapterBaseURLExplicitOverridesEnv(t *testing.T) {
+	t.Setenv("OPENAI_API_KEY", "test-key")
+	t.Setenv("OPENAI_BASE_URL", "https://ignored.example.com")
+
+	_, err := NewAdapter(Config[testIntent]{
+		Model:   "gpt-5.4-mini",
+		BaseURL: "https://explicit.example.com/v1",
+	})
+	if err != nil {
+		t.Fatalf("NewAdapter returned error: %v", err)
+	}
+}
+
+func TestNewAdapterBackwardCompatible(t *testing.T) {
+	t.Setenv("OPENAI_API_KEY", "test-key")
+
+	adapter, err := NewAdapter(Config[testIntent]{Model: "gpt-5.4-mini"})
+	if err != nil {
+		t.Fatalf("NewAdapter returned error: %v", err)
+	}
+	if adapter.model != "gpt-5.4-mini" {
+		t.Fatalf("model = %q, want gpt-5.4-mini", adapter.model)
+	}
+}
+
 func TestCustomRendererAndDecoderDisableDefaultJSONMode(t *testing.T) {
 	t.Setenv("OPENAI_API_KEY", "")
 

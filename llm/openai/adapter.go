@@ -26,6 +26,7 @@ const (
 // enter through llm.ReasoningInput.
 type Config[TIntent any] struct {
 	APIKey       string
+	BaseURL      string
 	Model        string
 	OutputFormat OutputFormat
 	Renderer     llm.PromptRenderer
@@ -41,9 +42,10 @@ type Adapter[TIntent any] struct {
 	decoder      llm.Decoder[TIntent]
 }
 
-// NewAdapter wires the SDK client and the renderer/decoder pair. APIKey
-// defaults to $OPENAI_API_KEY; Renderer and Decoder default to llm's generic
-// implementations.
+// NewAdapter wires the SDK client and the renderer/decoder pair. APIKey and
+// BaseURL default to $OPENAI_API_KEY and $OPENAI_BASE_URL respectively; explicit
+// config values take precedence over environment variables.
+// Renderer and Decoder default to llm's generic implementations.
 func NewAdapter[TIntent any](cfg Config[TIntent]) (*Adapter[TIntent], error) {
 	apiKey := strings.TrimSpace(cfg.APIKey)
 	if apiKey == "" {
@@ -51,6 +53,11 @@ func NewAdapter[TIntent any](cfg Config[TIntent]) (*Adapter[TIntent], error) {
 	}
 	if apiKey == "" {
 		return nil, errors.New("OPENAI_API_KEY is not set")
+	}
+
+	baseURL := strings.TrimSpace(cfg.BaseURL)
+	if baseURL == "" {
+		baseURL = strings.TrimSpace(os.Getenv("OPENAI_BASE_URL"))
 	}
 
 	model := strings.TrimSpace(cfg.Model)
@@ -72,8 +79,13 @@ func NewAdapter[TIntent any](cfg Config[TIntent]) (*Adapter[TIntent], error) {
 		}
 	}
 
+	clientOpts := []option.RequestOption{option.WithAPIKey(apiKey)}
+	if baseURL != "" {
+		clientOpts = append(clientOpts, option.WithBaseURL(baseURL))
+	}
+
 	return &Adapter[TIntent]{
-		client:       openai.NewClient(option.WithAPIKey(apiKey)),
+		client:       openai.NewClient(clientOpts...),
 		model:        model,
 		outputFormat: outputFormat,
 		renderer:     renderer,
