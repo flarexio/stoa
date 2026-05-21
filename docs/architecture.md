@@ -155,6 +155,48 @@ func (i Intent) Validate() error {
 }
 ```
 
+## OpenAI Adapter Configuration
+
+The `llm/openai` adapter accepts provider connection settings through its `Config` struct. Explicit config values take precedence over environment variables, so a Stoa application can carry its own LLM settings without colliding with other services on the same host.
+
+### Default OpenAI
+
+```go
+import "github.com/flarexio/stoa/llm/openai"
+
+engine, err := openai.NewAdapter(openai.Config[MyIntent]{
+    APIKey: os.Getenv("OPENAI_API_KEY"),
+    Model:  "gpt-5.4-mini",
+})
+```
+
+When `APIKey` is empty, the constructor falls back to `$OPENAI_API_KEY`.
+
+### OpenAI-compatible provider with custom base URL
+
+```go
+engine, err := openai.NewAdapter(openai.Config[MyIntent]{
+    APIKey:  "sk-...",
+    BaseURL: "https://api.openai.com/v1",
+    Model:   "gpt-5.4-mini",
+})
+```
+
+When `BaseURL` is empty, the constructor falls back to `$OPENAI_BASE_URL`. Set it to point at any OpenAI-compatible endpoint (Ollama, vLLM, LiteLLM, etc.).
+
+### API key injection without environment variables
+
+```go
+engine, err := openai.NewAdapter(openai.Config[MyIntent]{
+    APIKey:  loadSecret("llm/api-key"), // secrets manager, vault, etc.
+    Model:   "gpt-5.4-mini",
+})
+```
+
+### Precedence
+
+For both `APIKey` and `BaseURL`, explicit `Config` fields win over environment variables. If neither source provides a value, the constructor returns an error for `APIKey` and uses the SDK default for `BaseURL`.
+
 ## Reasoning Result Contract
 
 "Reasoning with evidence" should be part of the contract, not just a prompt instruction.
