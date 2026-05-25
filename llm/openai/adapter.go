@@ -159,25 +159,26 @@ func NewAdapter[TIntent any](cfg Config[TIntent]) (*Adapter[TIntent], error) {
 func (a *Adapter[TIntent]) Predict(ctx context.Context, input llm.ReasoningInput) (llm.ReasoningOutput[TIntent], error) {
 	var zero llm.ReasoningOutput[TIntent]
 
-	messages, err := a.messages(input)
+	tools, err := translateTools(input.Tools)
 	if err != nil {
 		return zero, err
 	}
+	hasTools := len(tools) > 0
 
-	tools, err := translateTools(input.Tools)
+	messages, err := a.messages(input, a.hintFor(hasTools))
 	if err != nil {
 		return zero, err
 	}
 
 	params := openai.ChatCompletionNewParams{
-		Messages: a.maybeInjectEnvelopeHint(messages, len(tools) > 0),
+		Messages: messages,
 		Model:    openai.ChatModel(a.model),
 	}
-	if len(tools) > 0 {
+	if hasTools {
 		params.Tools = tools
 	}
 
-	switch a.effectiveOutputFormat(len(tools) > 0) {
+	switch a.effectiveOutputFormat(hasTools) {
 	case OutputFormatJSONObject:
 		params.ResponseFormat = openai.ChatCompletionNewParamsResponseFormatUnion{
 			OfJSONObject: &shared.ResponseFormatJSONObjectParam{Type: "json_object"},
@@ -232,27 +233,26 @@ func (a *Adapter[TIntent]) effectiveOutputFormat(hasTools bool) OutputFormat {
 	return a.outputFormat
 }
 
-// maybeInjectEnvelopeHint prepends the envelope-shape system message when the
-// downgrade fires for this turn. Without it, the model sees only the loose
-// json_object constraint and may emit free-form text on content turns.
-func (a *Adapter[TIntent]) maybeInjectEnvelopeHint(messages []openai.ChatCompletionMessageParamUnion, hasTools bool) []openai.ChatCompletionMessageParamUnion {
+// hintFor returns the envelope-shape teaching for this turn, or "" when the
+// downgrade does not fire and the sampler-level guarantee still holds.
+func (a *Adapter[TIntent]) hintFor(hasTools bool) string {
 	if a.envelopeHint == "" || a.effectiveOutputFormat(hasTools) != OutputFormatJSONObject {
-		return messages
+		return ""
 	}
-	out := make([]openai.ChatCompletionMessageParamUnion, 0, len(messages)+1)
-	out = append(out, openai.SystemMessage(a.envelopeHint))
-	out = append(out, messages...)
-	return out
+	return a.envelopeHint
 }
 
-func (a *Adapter[TIntent]) messages(input llm.ReasoningInput) ([]openai.ChatCompletionMessageParamUnion, error) {
-	messages, err := a.renderer.Render(input)
+func (a *Adapter[TIntent]) messages(input llm.ReasoningInput, envelopeHint string) ([]openai.ChatCompletionMessageParamUnion, error) {
+	rendered, err := a.renderer.Render(input)
 	if err != nil {
 		return nil, fmt.Errorf("render prompt: %w", err)
 	}
+	if envelopeHint != "" {
+		rendered = mergeEnvelopeHint(rendered, envelopeHint)
+	}
 
-	translated := make([]openai.ChatCompletionMessageParamUnion, 0, len(messages))
-	for _, message := range messages {
+	translated := make([]openai.ChatCompletionMessageParamUnion, 0, len(rendered))
+	for _, message := range rendered {
 		content := strings.TrimSpace(message.Content)
 		if content == "" {
 			continue
@@ -300,6 +300,31 @@ func translateTools(specs []llm.ToolSpec) ([]openai.ChatCompletionToolParam, err
 		tools = append(tools, openai.ChatCompletionToolParam{Function: fn})
 	}
 	return tools, nil
+}
+
+// mergeEnvelopeHint folds the envelope hint into the first system message in
+// msgs (separated by a blank line), or prepends a new system message when none
+// exists. A single leading system message keeps Jinja chat templates that
+// forbid mid-conversation system roles (e.g. Qwen) happy.
+func mergeEnvelopeHint(msgs []llm.Message, hint string) []llm.Message {
+	out := make([]llm.Message, 0, len(msgs)+1)
+	merged := false
+	for _, m := range msgs {
+		if !merged && m.Role == llm.MessageRoleSystem {
+			content := strings.TrimSpace(m.Content)
+			if content != "" {
+				content += "\n\n"
+			}
+			out = append(out, llm.Message{Role: llm.MessageRoleSystem, Content: content + hint})
+			merged = true
+			continue
+		}
+		out = append(out, m)
+	}
+	if !merged {
+		out = append([]llm.Message{{Role: llm.MessageRoleSystem, Content: hint}}, out...)
+	}
+	return out
 }
 
 // buildEnvelopeHint composes a system message that teaches the envelope shape
