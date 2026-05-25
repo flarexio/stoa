@@ -270,6 +270,42 @@ func TestCustomRendererAndDecoderDisableDefaultJSONMode(t *testing.T) {
 	}
 }
 
+func TestEffectiveOutputFormatDowngradesWithToolsWhenFlagSet(t *testing.T) {
+	t.Setenv("OPENAI_API_KEY", "test-key")
+
+	adapter, err := NewAdapter(Config[testIntent]{
+		Model:                        "gpt-5.4-mini",
+		IntentSchema:                 json.RawMessage(`{"type":"object","additionalProperties":false,"required":["action"],"properties":{"action":{"type":"string"}}}`),
+		DisableStrictSchemaWithTools: true,
+	})
+	if err != nil {
+		t.Fatalf("NewAdapter returned error: %v", err)
+	}
+
+	if got := adapter.effectiveOutputFormat(true); got != OutputFormatJSONObject {
+		t.Fatalf("effectiveOutputFormat(hasTools=true) = %q, want json_object", got)
+	}
+	if got := adapter.effectiveOutputFormat(false); got != OutputFormatJSONSchema {
+		t.Fatalf("effectiveOutputFormat(hasTools=false) = %q, want json_schema (no tool path that turn)", got)
+	}
+}
+
+func TestEffectiveOutputFormatKeepsSchemaWithToolsWhenFlagUnset(t *testing.T) {
+	t.Setenv("OPENAI_API_KEY", "test-key")
+
+	adapter, err := NewAdapter(Config[testIntent]{
+		Model:        "gpt-5.4-mini",
+		IntentSchema: json.RawMessage(`{"type":"object","additionalProperties":false,"required":["action"],"properties":{"action":{"type":"string"}}}`),
+	})
+	if err != nil {
+		t.Fatalf("NewAdapter returned error: %v", err)
+	}
+
+	if got := adapter.effectiveOutputFormat(true); got != OutputFormatJSONSchema {
+		t.Fatalf("effectiveOutputFormat(hasTools=true, flag=false) = %q, want json_schema (default zero-regression behavior)", got)
+	}
+}
+
 func TestTranslateToolsBuildsFunctionParams(t *testing.T) {
 	specs := []llm.ToolSpec{
 		{
