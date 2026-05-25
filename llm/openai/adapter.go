@@ -46,18 +46,26 @@ type Config[TIntent any] struct {
 	// envelope and requests json_schema structured outputs in strict mode.
 	IntentSchema json.RawMessage
 
+	// DisableStrictSchemaWithTools downgrades response_format from
+	// json_schema(strict) to json_object on turns that pass tools. Required
+	// for llama.cpp-style servers whose grammar engine enforces
+	// response_format at the sampler and would otherwise block native
+	// tool_calls emission.
+	DisableStrictSchemaWithTools bool
+
 	Renderer llm.PromptRenderer
 	Decoder  llm.Decoder[TIntent]
 }
 
 // Adapter implements llm.ReasoningEngine using the official OpenAI Go SDK.
 type Adapter[TIntent any] struct {
-	client       openai.Client
-	model        string
-	outputFormat OutputFormat
-	envelope     any // assembled response_format schema; nil when not json_schema
-	renderer     llm.PromptRenderer
-	decoder      llm.Decoder[TIntent]
+	client                       openai.Client
+	model                        string
+	outputFormat                 OutputFormat
+	envelope                     any // assembled response_format schema; nil when not json_schema
+	disableStrictSchemaWithTools bool
+	renderer                     llm.PromptRenderer
+	decoder                      llm.Decoder[TIntent]
 }
 
 // NewAdapter wires the SDK client and the renderer/decoder pair. APIKey and
@@ -124,12 +132,13 @@ func NewAdapter[TIntent any](cfg Config[TIntent]) (*Adapter[TIntent], error) {
 	}
 
 	return &Adapter[TIntent]{
-		client:       openai.NewClient(clientOpts...),
-		model:        model,
-		outputFormat: outputFormat,
-		envelope:     envelope,
-		renderer:     renderer,
-		decoder:      decoder,
+		client:                       openai.NewClient(clientOpts...),
+		model:                        model,
+		outputFormat:                 outputFormat,
+		envelope:                     envelope,
+		disableStrictSchemaWithTools: cfg.DisableStrictSchemaWithTools,
+		renderer:                     renderer,
+		decoder:                      decoder,
 	}, nil
 }
 
@@ -148,7 +157,15 @@ func (a *Adapter[TIntent]) Predict(ctx context.Context, input llm.ReasoningInput
 		Model:    openai.ChatModel(a.model),
 	}
 
-	switch a.outputFormat {
+	tools, err := translateTools(input.Tools)
+	if err != nil {
+		return zero, err
+	}
+	if len(tools) > 0 {
+		params.Tools = tools
+	}
+
+	switch a.effectiveOutputFormat(len(tools) > 0) {
 	case OutputFormatJSONObject:
 		params.ResponseFormat = openai.ChatCompletionNewParamsResponseFormatUnion{
 			OfJSONObject: &shared.ResponseFormatJSONObjectParam{Type: "json_object"},
@@ -164,12 +181,6 @@ func (a *Adapter[TIntent]) Predict(ctx context.Context, input llm.ReasoningInput
 				},
 			},
 		}
-	}
-
-	if tools, err := translateTools(input.Tools); err != nil {
-		return zero, err
-	} else if len(tools) > 0 {
-		params.Tools = tools
 	}
 
 	resp, err := a.client.Chat.Completions.New(ctx, params)
@@ -197,6 +208,16 @@ func (a *Adapter[TIntent]) Predict(ctx context.Context, input llm.ReasoningInput
 		return zero, errors.New("openai chat completion returned empty content")
 	}
 	return a.decoder.Decode(content)
+}
+
+// effectiveOutputFormat returns the response_format to apply for one turn,
+// downgrading json_schema(strict) to json_object when tools are present and
+// DisableStrictSchemaWithTools is set.
+func (a *Adapter[TIntent]) effectiveOutputFormat(hasTools bool) OutputFormat {
+	if a.outputFormat == OutputFormatJSONSchema && hasTools && a.disableStrictSchemaWithTools {
+		return OutputFormatJSONObject
+	}
+	return a.outputFormat
 }
 
 func (a *Adapter[TIntent]) messages(input llm.ReasoningInput) ([]openai.ChatCompletionMessageParamUnion, error) {
