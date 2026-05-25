@@ -5,6 +5,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/openai/openai-go"
+
 	"github.com/flarexio/stoa/llm"
 )
 
@@ -303,6 +305,96 @@ func TestEffectiveOutputFormatKeepsSchemaWithToolsWhenFlagUnset(t *testing.T) {
 
 	if got := adapter.effectiveOutputFormat(true); got != OutputFormatJSONSchema {
 		t.Fatalf("effectiveOutputFormat(hasTools=true, flag=false) = %q, want json_schema (default zero-regression behavior)", got)
+	}
+}
+
+func TestNewAdapterBuildsEnvelopeHintWhenDowngradeEnabled(t *testing.T) {
+	t.Setenv("OPENAI_API_KEY", "test-key")
+
+	adapter, err := NewAdapter(Config[testIntent]{
+		Model:                        "gpt-5.4-mini",
+		IntentSchema:                 json.RawMessage(`{"type":"object","additionalProperties":false,"required":["action"],"properties":{"action":{"type":"string"}}}`),
+		DisableStrictSchemaWithTools: true,
+	})
+	if err != nil {
+		t.Fatalf("NewAdapter returned error: %v", err)
+	}
+
+	for _, want := range []string{
+		`"evidence"`,
+		`"rationale"`,
+		`"intent"`,
+		`"action"`, // the inlined IntentSchema field
+		"No prose",
+	} {
+		if !strings.Contains(adapter.envelopeHint, want) {
+			t.Fatalf("envelopeHint missing %q:\n%s", want, adapter.envelopeHint)
+		}
+	}
+}
+
+func TestNewAdapterNoEnvelopeHintWithoutFlag(t *testing.T) {
+	t.Setenv("OPENAI_API_KEY", "test-key")
+
+	adapter, err := NewAdapter(Config[testIntent]{
+		Model:        "gpt-5.4-mini",
+		IntentSchema: json.RawMessage(`{"type":"object","additionalProperties":false,"required":["action"],"properties":{"action":{"type":"string"}}}`),
+	})
+	if err != nil {
+		t.Fatalf("NewAdapter returned error: %v", err)
+	}
+	if adapter.envelopeHint != "" {
+		t.Fatalf("envelopeHint should be empty when downgrade cannot fire, got:\n%s", adapter.envelopeHint)
+	}
+}
+
+func TestMaybeInjectEnvelopeHintInjectsOnDowngradeTurn(t *testing.T) {
+	t.Setenv("OPENAI_API_KEY", "test-key")
+
+	adapter, err := NewAdapter(Config[testIntent]{
+		Model:                        "gpt-5.4-mini",
+		IntentSchema:                 json.RawMessage(`{"type":"object","additionalProperties":false,"required":["action"],"properties":{"action":{"type":"string"}}}`),
+		DisableStrictSchemaWithTools: true,
+	})
+	if err != nil {
+		t.Fatalf("NewAdapter returned error: %v", err)
+	}
+
+	base := []openai.ChatCompletionMessageParamUnion{openai.UserMessage("hi")}
+
+	got := adapter.maybeInjectEnvelopeHint(base, true)
+	if len(got) != len(base)+1 {
+		t.Fatalf("hasTools=true: got %d messages, want %d (hint prepended)", len(got), len(base)+1)
+	}
+	encoded, _ := json.Marshal(got[0])
+	if !strings.Contains(string(encoded), `"role":"system"`) {
+		t.Fatalf("first message should be system, got %s", encoded)
+	}
+	if !strings.Contains(string(encoded), "evidence") {
+		t.Fatalf("system message should be the envelope hint, got %s", encoded)
+	}
+
+	got = adapter.maybeInjectEnvelopeHint(base, false)
+	if len(got) != len(base) {
+		t.Fatalf("hasTools=false: got %d messages, want %d (no injection — strict schema still fires)", len(got), len(base))
+	}
+}
+
+func TestMaybeInjectEnvelopeHintNoopWithoutFlag(t *testing.T) {
+	t.Setenv("OPENAI_API_KEY", "test-key")
+
+	adapter, err := NewAdapter(Config[testIntent]{
+		Model:        "gpt-5.4-mini",
+		IntentSchema: json.RawMessage(`{"type":"object","additionalProperties":false,"required":["action"],"properties":{"action":{"type":"string"}}}`),
+	})
+	if err != nil {
+		t.Fatalf("NewAdapter returned error: %v", err)
+	}
+
+	base := []openai.ChatCompletionMessageParamUnion{openai.UserMessage("hi")}
+	got := adapter.maybeInjectEnvelopeHint(base, true)
+	if len(got) != len(base) {
+		t.Fatalf("flag off: hint must not inject, got %d messages, want %d", len(got), len(base))
 	}
 }
 
