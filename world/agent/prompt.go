@@ -53,8 +53,6 @@ func (r PromptRenderer) buildUserPrompt(input llm.ReasoningInput) string {
 	}
 	b.WriteString("\n\n")
 	b.WriteString(r.describeWorld())
-	b.WriteString("\nReturn JSON with this exact shape:\n")
-	b.WriteString(`{"evidence":[{"source":"world","fact":"..."}],"rationale":"...","intent":{"say":"...","emotion":"...","action":{"type":"speak","target_id":"player_id"}}}`)
 	return b.String()
 }
 
@@ -95,5 +93,4 @@ Rules you must follow:
 - Interact only with actors in your current location.
 - Only give or trade items you own.
 - If moving, only target reachable locations.
-- If validation feedback is present, fix only the named problems and resubmit.
-- Output JSON only. No prose outside the JSON object.`
+- If validation feedback is present, fix only the named problems and resubmit.`

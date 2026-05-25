@@ -36,6 +36,8 @@ func (r DefaultPromptRenderer) Render(input ReasoningInput) ([]Message, error) {
 }
 
 // RenderReasoningInput renders the task and instructions as a user-message body.
+// The reply shape is enforced by the provider's structured-output mode (e.g.
+// json_schema) and by registered tools, so it does not appear here.
 func RenderReasoningInput(input ReasoningInput) string {
 	var b strings.Builder
 	b.WriteString("Task:\n")
@@ -44,8 +46,6 @@ func RenderReasoningInput(input ReasoningInput) string {
 		b.WriteString("\n\nFeature instructions:\n")
 		b.WriteString(strings.TrimSpace(input.Instructions))
 	}
-	b.WriteString("\n\nReturn JSON with this exact shape:\n")
-	b.WriteString(`{"evidence":[{"source":"...","fact":"..."}],"rationale":"...","intent":{...}}`)
 	return b.String()
 }
 
@@ -56,9 +56,7 @@ func RenderCycleEvent(event CycleEvent) string {
 
 const defaultSystemPrompt = `You are a Stoa reasoning engine.
 
-You must produce structured JSON only.
-You do not execute actions.
-You propose a typed intent for Go code to validate.
+You propose a typed intent for Go code to validate; you do not execute actions.
 Use only supplied facts as evidence.
-If validation or execution feedback is present, correct the next intent accordingly.
-The top-level JSON object must contain evidence, rationale, and intent.`
+If validation, execution, or tool-result feedback is present, correct the next intent accordingly.
+When you need information before you can commit to an intent, call a registered tool instead.`

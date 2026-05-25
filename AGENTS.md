@@ -47,8 +47,8 @@ To ensure "Knowing and Doing are One", every agent follows this cycle:
 If an AI agent performs a release, preserve the agent attribution in the commit metadata as a `Co-Author`. Some tools add this automatically; for tools that do not, the agent must add it explicitly instead of omitting it.
 
 ## Current LLM Contract
-- `llm.ReasoningEngine[TIntent]` returns `llm.ReasoningResult[TIntent]` with evidence, rationale, and either a typed intent or tool calls.
-- A turn may return `llm.ToolCall` values instead of a final intent; `harness/loop` runs the matching tool handler and feeds the result back as a typed `tool_result` event before the next turn.
-- `llm.PromptRenderer` converts typed reasoning input into provider-neutral messages.
-- `llm.Decoder[TIntent]` converts raw model output into typed reasoning results. JSON is only the default decoder, not an architecture requirement.
-- OpenAI code under `llm/openai/` must stay provider-specific: SDK calls, message translation, response-format selection, and provider error wrapping only.
+- `llm.ReasoningEngine[TIntent]` returns `llm.ReasoningOutput[TIntent]`, a discriminated value carrying evidence, rationale, and either a typed intent (`Kind == ReasoningIntent`) or a list of tool calls (`Kind == ReasoningToolCalls`) — never both.
+- Tools are registered on `harness/loop.Runner.Tools` as `loop.Tool{Spec, Handler}`. The loop forwards the specs as `ReasoningInput.Tools`; adapters translate them into provider-native function definitions, then route the model's `tool_calls` back through the handler whose `Spec.Name` matches.
+- `llm.PromptRenderer` converts typed reasoning input into provider-neutral messages and never prescribes the response shape — structured outputs and native tool calls enforce that.
+- `llm.Decoder[TIntent]` is used by adapters when the model returns content rather than a native tool call; the default `JSONDecoder` parses the canonical `{evidence, rationale, intent}` envelope.
+- OpenAI code under `llm/openai/` must stay provider-specific: SDK calls, message translation, response-format selection (`json_schema` when `Config.IntentSchema` is set, `json_object` otherwise), tool translation, and provider error wrapping only.

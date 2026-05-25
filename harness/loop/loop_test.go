@@ -15,30 +15,35 @@ type testIntent struct {
 }
 
 type fakeEngine struct {
-	results []llm.ReasoningResult[testIntent]
+	results []llm.ReasoningOutput[testIntent]
 	inputs  []llm.ReasoningInput
 }
 
-func (e *fakeEngine) Predict(ctx context.Context, input llm.ReasoningInput) (llm.ReasoningResult[testIntent], error) {
+func (e *fakeEngine) Predict(ctx context.Context, input llm.ReasoningInput) (llm.ReasoningOutput[testIntent], error) {
 	e.inputs = append(e.inputs, input)
 	if err := ctx.Err(); err != nil {
-		return llm.ReasoningResult[testIntent]{}, err
+		return llm.ReasoningOutput[testIntent]{}, err
 	}
 	if len(e.results) == 0 {
-		return llm.ReasoningResult[testIntent]{}, errors.New("no result")
+		return llm.ReasoningOutput[testIntent]{}, errors.New("no result")
 	}
 	result := e.results[0]
 	e.results = e.results[1:]
 	return result, nil
 }
 
+func intentOutput(action, rationale string) llm.ReasoningOutput[testIntent] {
+	return llm.IntentOutput(testIntent{Action: action}, nil, rationale)
+}
+
+func toolCallsOutput(rationale string, calls ...llm.ToolCall) llm.ReasoningOutput[testIntent] {
+	return llm.ToolCallsOutput[testIntent](calls, nil, rationale)
+}
+
 func TestRunnerExecutesValidatedIntent(t *testing.T) {
 	engine := &fakeEngine{
-		results: []llm.ReasoningResult[testIntent]{
-			{
-				Rationale: "action is supported",
-				Intent:    testIntent{Action: "continue"},
-			},
+		results: []llm.ReasoningOutput[testIntent]{
+			intentOutput("continue", "action is supported"),
 		},
 	}
 
@@ -73,15 +78,9 @@ func TestRunnerExecutesValidatedIntent(t *testing.T) {
 
 func TestRunnerFeedsValidationErrorBackIntoNextTurn(t *testing.T) {
 	engine := &fakeEngine{
-		results: []llm.ReasoningResult[testIntent]{
-			{
-				Rationale: "try invalid action",
-				Intent:    testIntent{Action: "delete"},
-			},
-			{
-				Rationale: "correct unsupported action",
-				Intent:    testIntent{Action: "continue"},
-			},
+		results: []llm.ReasoningOutput[testIntent]{
+			intentOutput("delete", "try invalid action"),
+			intentOutput("continue", "correct unsupported action"),
 		},
 	}
 
@@ -118,15 +117,9 @@ func TestRunnerFeedsValidationErrorBackIntoNextTurn(t *testing.T) {
 
 func TestRunnerUsesCustomValidationFormatter(t *testing.T) {
 	engine := &fakeEngine{
-		results: []llm.ReasoningResult[testIntent]{
-			{
-				Rationale: "try invalid action",
-				Intent:    testIntent{Action: "delete"},
-			},
-			{
-				Rationale: "correct unsupported action",
-				Intent:    testIntent{Action: "continue"},
-			},
+		results: []llm.ReasoningOutput[testIntent]{
+			intentOutput("delete", "try invalid action"),
+			intentOutput("continue", "correct unsupported action"),
 		},
 	}
 
@@ -161,9 +154,9 @@ func TestRunnerUsesCustomValidationFormatter(t *testing.T) {
 
 func TestRunnerFeedsExecutionErrorBackIntoNextTurn(t *testing.T) {
 	engine := &fakeEngine{
-		results: []llm.ReasoningResult[testIntent]{
-			{Rationale: "first try", Intent: testIntent{Action: "continue"}},
-			{Rationale: "retry after executor feedback", Intent: testIntent{Action: "continue"}},
+		results: []llm.ReasoningOutput[testIntent]{
+			intentOutput("continue", "first try"),
+			intentOutput("continue", "retry after executor feedback"),
 		},
 	}
 	executions := 0
@@ -197,9 +190,9 @@ func TestRunnerFeedsExecutionErrorBackIntoNextTurn(t *testing.T) {
 
 func TestRunnerStopsAtMaxTurns(t *testing.T) {
 	engine := &fakeEngine{
-		results: []llm.ReasoningResult[testIntent]{
-			{Rationale: "invalid", Intent: testIntent{Action: "delete"}},
-			{Rationale: "still invalid", Intent: testIntent{Action: "delete"}},
+		results: []llm.ReasoningOutput[testIntent]{
+			intentOutput("delete", "invalid"),
+			intentOutput("delete", "still invalid"),
 		},
 	}
 
@@ -242,11 +235,8 @@ func (s *recordingSink) Emit(_ context.Context, event llm.CycleEvent) error {
 
 func TestEventSinkReceivesEventsInOrder(t *testing.T) {
 	engine := &fakeEngine{
-		results: []llm.ReasoningResult[testIntent]{
-			{
-				Rationale: "action is supported",
-				Intent:    testIntent{Action: "continue"},
-			},
+		results: []llm.ReasoningOutput[testIntent]{
+			intentOutput("continue", "action is supported"),
 		},
 	}
 
@@ -282,9 +272,9 @@ func TestEventSinkReceivesEventsInOrder(t *testing.T) {
 
 func TestEventSinkReceivesValidationErrors(t *testing.T) {
 	engine := &fakeEngine{
-		results: []llm.ReasoningResult[testIntent]{
-			{Rationale: "try invalid", Intent: testIntent{Action: "delete"}},
-			{Rationale: "corrected", Intent: testIntent{Action: "continue"}},
+		results: []llm.ReasoningOutput[testIntent]{
+			intentOutput("delete", "try invalid"),
+			intentOutput("continue", "corrected"),
 		},
 	}
 
@@ -331,9 +321,9 @@ func TestEventSinkReceivesValidationErrors(t *testing.T) {
 
 func TestEventSinkReceivesExecutionErrors(t *testing.T) {
 	engine := &fakeEngine{
-		results: []llm.ReasoningResult[testIntent]{
-			{Rationale: "first try", Intent: testIntent{Action: "continue"}},
-			{Rationale: "retry", Intent: testIntent{Action: "continue"}},
+		results: []llm.ReasoningOutput[testIntent]{
+			intentOutput("continue", "first try"),
+			intentOutput("continue", "retry"),
 		},
 	}
 	executions := 0
@@ -387,9 +377,9 @@ func (s *errorSink) Emit(_ context.Context, _ llm.CycleEvent) error {
 
 func TestEventSinkErrorPropagates(t *testing.T) {
 	engine := &fakeEngine{
-		results: []llm.ReasoningResult[testIntent]{
-			{Rationale: "try invalid", Intent: testIntent{Action: "delete"}},
-			{Rationale: "corrected", Intent: testIntent{Action: "continue"}},
+		results: []llm.ReasoningOutput[testIntent]{
+			intentOutput("delete", "try invalid"),
+			intentOutput("continue", "corrected"),
 		},
 	}
 
@@ -420,9 +410,9 @@ func TestContextCancellationAbortsLoop(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	engine := &fakeEngine{
-		results: []llm.ReasoningResult[testIntent]{
-			{Rationale: "try invalid", Intent: testIntent{Action: "delete"}},
-			{Rationale: "corrected", Intent: testIntent{Action: "continue"}},
+		results: []llm.ReasoningOutput[testIntent]{
+			intentOutput("delete", "try invalid"),
+			intentOutput("continue", "corrected"),
 		},
 	}
 
@@ -460,25 +450,26 @@ func TestContextCancellationAbortsLoop(t *testing.T) {
 
 func TestRunnerRunsToolThenIntent(t *testing.T) {
 	engine := &fakeEngine{
-		results: []llm.ReasoningResult[testIntent]{
-			{
-				Rationale: "need a lookup first",
-				ToolCalls: []llm.ToolCall{{Name: "echo", Args: json.RawMessage(`{"q":"hello"}`)}},
-			},
-			{
-				Rationale: "now I can act",
-				Intent:    testIntent{Action: "continue"},
-			},
+		results: []llm.ReasoningOutput[testIntent]{
+			toolCallsOutput("need a lookup first", llm.ToolCall{Name: "echo", Args: json.RawMessage(`{"q":"hello"}`)}),
+			intentOutput("continue", "now I can act"),
 		},
 	}
 
 	var toolArgs string
 	runner := Runner[testIntent]{
 		Engine: engine,
-		Tools: map[string]ToolHandler{
-			"echo": func(_ context.Context, args json.RawMessage) (string, error) {
-				toolArgs = string(args)
-				return "echoed: " + string(args), nil
+		Tools: map[string]Tool{
+			"echo": {
+				Spec: llm.ToolSpec{
+					Name:        "echo",
+					Description: "echo back its args",
+					ArgsSchema:  json.RawMessage(`{"type":"object","properties":{"q":{"type":"string"}},"required":["q"]}`),
+				},
+				Handler: func(_ context.Context, args json.RawMessage) (string, error) {
+					toolArgs = string(args)
+					return "echoed: " + string(args), nil
+				},
 			},
 		},
 		Validator: ValidatorFunc[testIntent](func(context.Context, testIntent) error { return nil }),
@@ -500,6 +491,10 @@ func TestRunnerRunsToolThenIntent(t *testing.T) {
 	if len(engine.inputs) != 2 {
 		t.Fatalf("engine called %d times, want 2", len(engine.inputs))
 	}
+	specs := engine.inputs[0].Tools
+	if len(specs) != 1 || specs[0].Name != "echo" {
+		t.Fatalf("first turn tool specs = %+v, want one [echo]", specs)
+	}
 	var sawToolResult bool
 	for _, ev := range engine.inputs[1].Events {
 		if ev.Kind == llm.EventToolResult && strings.Contains(ev.Content, "echoed:") {
@@ -517,9 +512,9 @@ func TestRunnerRunsToolThenIntent(t *testing.T) {
 func TestRunnerUnknownToolFeedsBackAndContinues(t *testing.T) {
 	// no Tools registered: unknown tool call must feed back, not abort.
 	engine := &fakeEngine{
-		results: []llm.ReasoningResult[testIntent]{
-			{Rationale: "try a tool", ToolCalls: []llm.ToolCall{{Name: "nope"}}},
-			{Rationale: "fall back to acting", Intent: testIntent{Action: "continue"}},
+		results: []llm.ReasoningOutput[testIntent]{
+			toolCallsOutput("try a tool", llm.ToolCall{Name: "nope"}),
+			intentOutput("continue", "fall back to acting"),
 		},
 	}
 	runner := Runner[testIntent]{

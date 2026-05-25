@@ -98,8 +98,8 @@ sequenceDiagram
 
     Note over UC: Start task with typed context
     loop Reasoning Cycle
-        UC->>RE: Predict(Task, Events) -> ReasoningResult[Intent]
-        RE-->>UC: Evidence + Rationale + Intent or ToolCalls
+        UC->>RE: Predict(Task, Events, Tools) -> ReasoningOutput[Intent]
+        RE-->>UC: Evidence + Rationale + (Intent | ToolCalls)
 
         alt Tool calls
             UC->>TOOL: Run each requested tool
@@ -128,7 +128,7 @@ Use cases define the capabilities they need as narrow interfaces. Adapters imple
 
 ```go
 type ReasoningEngine[TIntent any] interface {
-	Predict(ctx context.Context, input ReasoningInput) (ReasoningResult[TIntent], error)
+	Predict(ctx context.Context, input ReasoningInput) (ReasoningOutput[TIntent], error)
 }
 
 type Executor[TIntent any] interface {
@@ -197,16 +197,30 @@ engine, err := openai.NewAdapter(openai.Config[MyIntent]{
 
 For both `APIKey` and `BaseURL`, explicit `Config` fields win over environment variables. If neither source provides a value, the constructor returns an error for `APIKey` and uses the SDK default for `BaseURL`.
 
-## Reasoning Result Contract
+## Reasoning Output Contract
 
-"Reasoning with evidence" should be part of the contract, not just a prompt instruction.
+"Reasoning with evidence" should be part of the contract, not just a prompt instruction. A turn is one of two mutually exclusive shapes, discriminated by `Kind`.
 
 ```go
-type ReasoningResult[TIntent any] struct {
+type ReasoningKind string
+
+const (
+	ReasoningIntent    ReasoningKind = "intent"
+	ReasoningToolCalls ReasoningKind = "tool_calls"
+)
+
+type ReasoningOutput[TIntent any] struct {
+	Kind      ReasoningKind
 	Evidence  []EvidenceRef
 	Rationale string
-	Intent    TIntent
-	ToolCalls []ToolCall
+	Intent    TIntent    // populated when Kind == ReasoningIntent
+	ToolCalls []ToolCall // populated when Kind == ReasoningToolCalls
+}
+
+type ToolSpec struct {
+	Name        string
+	Description string
+	ArgsSchema  json.RawMessage // JSON Schema describing the args
 }
 
 type ToolCall struct {
@@ -222,7 +236,9 @@ type EvidenceRef struct {
 
 `Rationale` should be concise and auditable. It is not a place to depend on hidden chain-of-thought. The contract should capture what a validator, test, or human reviewer can inspect.
 
-A turn populates either `Intent` or `ToolCalls`: when the model must look something up before it can commit, it returns tool calls, and the harness loop runs them and feeds the results back before the next turn. The loop never inspects a tool's arguments or result, so the mechanism stays generic across features.
+Tools are registered on the harness `Runner.Tools` map. On each turn the loop forwards their `ToolSpec`s as `ReasoningInput.Tools`; the OpenAI adapter then translates them into the SDK's native `tools` parameter and reads `message.tool_calls` from the response. The model picks one of the two terminal shapes per turn; the loop runs the requested tools (when `Kind == ReasoningToolCalls`) and feeds their results back as `EventToolResult` events before the next turn.
+
+`llm/openai` also supports `json_schema` structured outputs: pass `Config.IntentSchema` and the adapter wraps it in the canonical `{evidence, rationale, intent}` envelope and requests strict structured output, so the model cannot produce malformed envelopes or two concatenated objects. Without `IntentSchema`, the adapter falls back to `json_object` for back-compatibility.
 
 ## Cycle Events
 

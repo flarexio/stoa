@@ -23,26 +23,24 @@ func newScriptedEngine(w world.WorldState, actorID string) *scriptedEngine {
 	return &scriptedEngine{world: w, actorID: actorID}
 }
 
-func (e *scriptedEngine) Predict(_ context.Context, input llm.ReasoningInput) (llm.ReasoningResult[world.NPCIntent], error) {
+func (e *scriptedEngine) Predict(_ context.Context, input llm.ReasoningInput) (llm.ReasoningOutput[world.NPCIntent], error) {
 	if hasValidationFeedback(input.Events) {
 		intent, rationale := e.recover()
-		return llm.ReasoningResult[world.NPCIntent]{
-			Evidence: []llm.EvidenceRef{
+		return llm.IntentOutput(intent,
+			[]llm.EvidenceRef{
 				{Source: "validator", Fact: "previous intent was rejected; corrected to a valid action"},
 			},
-			Rationale: rationale,
-			Intent:    intent,
-		}, nil
+			rationale,
+		), nil
 	}
 
 	intent, rationale := e.firstAttempt()
-	return llm.ReasoningResult[world.NPCIntent]{
-		Evidence: []llm.EvidenceRef{
+	return llm.IntentOutput(intent,
+		[]llm.EvidenceRef{
 			{Source: "scenario", Fact: fmt.Sprintf("acting as %s", e.actorID)},
 		},
-		Rationale: rationale,
-		Intent:    intent,
-	}, nil
+		rationale,
+	), nil
 }
 
 // firstAttempt proposes an intent the validator will reject, exercising the feedback loop.

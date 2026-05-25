@@ -67,5 +67,4 @@ func (a NPC) Act(ctx context.Context, actorID string, w world.WorldState, task s
 }
 
 const npcInstructions = `You are a game NPC. Propose a typed intent with dialogue and one action.
-If validation feedback is present in the message history, fix only the problems it names and resubmit.
-Output JSON only. No prose outside the JSON object.`
+If validation feedback is present in the message history, fix only the problems it names and resubmit.`
