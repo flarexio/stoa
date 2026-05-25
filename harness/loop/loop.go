@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/flarexio/stoa/llm"
@@ -48,6 +49,14 @@ func (f ExecutorFunc[TIntent]) Execute(ctx context.Context, intent TIntent) (llm
 // model's next turn.
 type ToolHandler func(ctx context.Context, args json.RawMessage) (string, error)
 
+// Tool pairs a llm.ToolSpec (what the model sees) with the handler that runs
+// when the model invokes it. The loop owns the registry; adapters translate
+// the spec list into provider-native tool definitions.
+type Tool struct {
+	Spec    llm.ToolSpec
+	Handler ToolHandler
+}
+
 // EventSink receives per-turn cycle events as they happen, so a caller can
 // observe the loop incrementally (e.g. a TUI). When Sink is nil, Run is a
 // plain blocking call.
@@ -60,7 +69,7 @@ type Runner[TIntent any] struct {
 	Engine              llm.ReasoningEngine[TIntent]
 	Validator           Validator[TIntent]
 	Executor            Executor[TIntent]
-	Tools               map[string]ToolHandler // optional; keyed by tool name
+	Tools               map[string]Tool // optional; keyed by tool name
 	ValidationFormatter FeedbackFormatter
 	ExecutionFormatter  FeedbackFormatter
 	MaxTurns            int
@@ -72,7 +81,7 @@ type FeedbackFormatter func(error) string
 
 // Result is the outcome of one Run.
 type Result[TIntent any] struct {
-	Reasoning   llm.ReasoningResult[TIntent]
+	Reasoning   llm.ReasoningOutput[TIntent]
 	Observation llm.Observation
 	Events      []llm.CycleEvent
 	Turns       int
@@ -89,10 +98,12 @@ func (r Runner[TIntent]) Run(ctx context.Context, input llm.ReasoningInput) (Res
 		maxTurns = defaultMaxTurns
 	}
 
+	specs := r.toolSpecs()
 	events := append([]llm.CycleEvent(nil), input.Events...)
 	for turn := 1; turn <= maxTurns; turn++ {
 		cycleInput := input
 		cycleInput.Events = append([]llm.CycleEvent(nil), events...)
+		cycleInput.Tools = specs
 
 		reasoning, err := r.Engine.Predict(ctx, cycleInput)
 		if err != nil {
@@ -109,9 +120,8 @@ func (r Runner[TIntent]) Run(ctx context.Context, input llm.ReasoningInput) (Res
 			return result, fmt.Errorf("loop: event sink (model output): %w", err)
 		}
 
-		// A turn that asks for tools yields no intent: run each tool,
-		// feed the results back as events, and re-predict.
-		if len(reasoning.ToolCalls) > 0 {
+		switch reasoning.Kind {
+		case llm.ReasoningToolCalls:
 			for _, call := range reasoning.ToolCalls {
 				te := r.runTool(ctx, call)
 				events = append(events, te)
@@ -122,6 +132,10 @@ func (r Runner[TIntent]) Run(ctx context.Context, input llm.ReasoningInput) (Res
 				}
 			}
 			continue
+		case llm.ReasoningIntent:
+			// fall through
+		default:
+			return result, fmt.Errorf("loop: unknown reasoning kind %q", reasoning.Kind)
 		}
 
 		if err := r.Validator.Validate(ctx, reasoning.Intent); err != nil {
@@ -175,14 +189,32 @@ func (r Runner[TIntent]) emit(ctx context.Context, event llm.CycleEvent) error {
 	return r.Sink.Emit(ctx, event)
 }
 
+// toolSpecs returns the registered tools' specs, sorted by name for a stable
+// prompt ordering across turns.
+func (r Runner[TIntent]) toolSpecs() []llm.ToolSpec {
+	if len(r.Tools) == 0 {
+		return nil
+	}
+	names := make([]string, 0, len(r.Tools))
+	for name := range r.Tools {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	specs := make([]llm.ToolSpec, 0, len(names))
+	for _, name := range names {
+		specs = append(specs, r.Tools[name].Spec)
+	}
+	return specs
+}
+
 // runTool routes one tool call to its handler. An unknown name or handler
 // error becomes feedback the model can recover from; it never aborts the loop.
 func (r Runner[TIntent]) runTool(ctx context.Context, call llm.ToolCall) llm.CycleEvent {
-	handler, ok := r.Tools[call.Name]
-	if !ok {
+	tool, ok := r.Tools[call.Name]
+	if !ok || tool.Handler == nil {
 		return toolResultEvent(call.Name, fmt.Sprintf("tool %q is not available", call.Name))
 	}
-	out, err := handler(ctx, call.Args)
+	out, err := tool.Handler(ctx, call.Args)
 	if err != nil {
 		return toolResultEvent(call.Name, fmt.Sprintf("tool %q failed: %v", call.Name, err))
 	}
@@ -216,14 +248,17 @@ func (r Runner[TIntent]) executionFormatter() FeedbackFormatter {
 	return defaultExecutionFormatter
 }
 
-func modelOutputEvent[TIntent any](reasoning llm.ReasoningResult[TIntent]) llm.CycleEvent {
-	detail := "intent: " + formatIntent(reasoning.Intent)
-	if len(reasoning.ToolCalls) > 0 {
+func modelOutputEvent[TIntent any](reasoning llm.ReasoningOutput[TIntent]) llm.CycleEvent {
+	var detail string
+	switch reasoning.Kind {
+	case llm.ReasoningToolCalls:
 		calls := make([]string, len(reasoning.ToolCalls))
 		for i, c := range reasoning.ToolCalls {
 			calls[i] = strings.TrimSpace(c.Name + " " + string(c.Args))
 		}
 		detail = "tool calls:\n  " + strings.Join(calls, "\n  ")
+	default:
+		detail = "intent: " + formatIntent(reasoning.Intent)
 	}
 	return llm.CycleEvent{
 		Role:    llm.EventRoleAssistant,

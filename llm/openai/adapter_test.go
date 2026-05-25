@@ -45,7 +45,9 @@ func TestNewAdapterAcceptsExplicitModel(t *testing.T) {
 	}
 }
 
-func TestRenderReasoningInputIncludesContract(t *testing.T) {
+func TestRenderReasoningInputDoesNotDictateShape(t *testing.T) {
+	// With structured outputs / native tools, the prompt no longer prescribes
+	// the JSON envelope; the provider enforces it.
 	rendered := llm.RenderReasoningInput(llm.ReasoningInput{
 		Task:         "Choose the next step.",
 		Instructions: "Only use validated facts.",
@@ -56,12 +58,14 @@ func TestRenderReasoningInputIncludesContract(t *testing.T) {
 		"Choose the next step.",
 		"Feature instructions:",
 		"Only use validated facts.",
-		`"evidence"`,
-		`"rationale"`,
-		`"intent"`,
 	} {
 		if !strings.Contains(rendered, want) {
 			t.Fatalf("rendered input missing %q:\n%s", want, rendered)
+		}
+	}
+	for _, banned := range []string{`"evidence"`, `"rationale"`, `"intent"`} {
+		if strings.Contains(rendered, banned) {
+			t.Fatalf("rendered input must not embed the response shape %q anymore:\n%s", banned, rendered)
 		}
 	}
 }
@@ -178,15 +182,58 @@ func TestNewAdapterBaseURLExplicitOverridesEnv(t *testing.T) {
 	}
 }
 
-func TestNewAdapterBackwardCompatible(t *testing.T) {
+func TestNewAdapterDefaultsToJSONObjectWithoutSchema(t *testing.T) {
 	t.Setenv("OPENAI_API_KEY", "test-key")
 
 	adapter, err := NewAdapter(Config[testIntent]{Model: "gpt-5.4-mini"})
 	if err != nil {
 		t.Fatalf("NewAdapter returned error: %v", err)
 	}
-	if adapter.model != "gpt-5.4-mini" {
-		t.Fatalf("model = %q, want gpt-5.4-mini", adapter.model)
+	if adapter.outputFormat != OutputFormatJSONObject {
+		t.Fatalf("outputFormat = %q, want json_object (back-compat default)", adapter.outputFormat)
+	}
+}
+
+func TestNewAdapterSwitchesToJSONSchemaWhenIntentSchemaProvided(t *testing.T) {
+	t.Setenv("OPENAI_API_KEY", "test-key")
+
+	adapter, err := NewAdapter(Config[testIntent]{
+		Model:        "gpt-5.4-mini",
+		IntentSchema: json.RawMessage(`{"type":"object","additionalProperties":false,"required":["action"],"properties":{"action":{"type":"string"}}}`),
+	})
+	if err != nil {
+		t.Fatalf("NewAdapter returned error: %v", err)
+	}
+	if adapter.outputFormat != OutputFormatJSONSchema {
+		t.Fatalf("outputFormat = %q, want json_schema", adapter.outputFormat)
+	}
+
+	envelope, ok := adapter.envelope.(map[string]any)
+	if !ok {
+		t.Fatalf("envelope is %T, want map[string]any", adapter.envelope)
+	}
+	required, ok := envelope["required"].([]string)
+	if !ok || len(required) != 3 {
+		t.Fatalf("envelope.required = %v, want [evidence rationale intent]", envelope["required"])
+	}
+	props, ok := envelope["properties"].(map[string]any)
+	if !ok {
+		t.Fatalf("envelope.properties is %T", envelope["properties"])
+	}
+	if _, ok := props["intent"]; !ok {
+		t.Fatal("envelope.properties.intent missing")
+	}
+}
+
+func TestNewAdapterRejectsJSONSchemaWithoutIntentSchema(t *testing.T) {
+	t.Setenv("OPENAI_API_KEY", "test-key")
+
+	_, err := NewAdapter(Config[testIntent]{
+		Model:        "gpt-5.4-mini",
+		OutputFormat: OutputFormatJSONSchema,
+	})
+	if err == nil {
+		t.Fatal("expected error when json_schema is requested without IntentSchema")
 	}
 }
 
@@ -199,10 +246,8 @@ func TestCustomRendererAndDecoderDisableDefaultJSONMode(t *testing.T) {
 		Renderer: llm.PromptRendererFunc(func(input llm.ReasoningInput) ([]llm.Message, error) {
 			return []llm.Message{{Role: llm.MessageRoleUser, Content: input.Task}}, nil
 		}),
-		Decoder: llm.DecoderFunc[testIntent](func(content string) (llm.ReasoningResult[testIntent], error) {
-			return llm.ReasoningResult[testIntent]{
-				Intent: testIntent{Action: strings.TrimSpace(content)},
-			}, nil
+		Decoder: llm.DecoderFunc[testIntent](func(content string) (llm.ReasoningOutput[testIntent], error) {
+			return llm.IntentOutput(testIntent{Action: strings.TrimSpace(content)}, nil, ""), nil
 		}),
 	})
 	if err != nil {
@@ -217,7 +262,57 @@ func TestCustomRendererAndDecoderDisableDefaultJSONMode(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Decode returned error: %v", err)
 	}
+	if decoded.Kind != llm.ReasoningIntent {
+		t.Fatalf("decoded kind = %q, want intent", decoded.Kind)
+	}
 	if decoded.Intent.Action != "handoff" {
 		t.Fatalf("decoded action = %q, want handoff", decoded.Intent.Action)
+	}
+}
+
+func TestTranslateToolsBuildsFunctionParams(t *testing.T) {
+	specs := []llm.ToolSpec{
+		{
+			Name:        "find_accounts",
+			Description: "look up account codes",
+			ArgsSchema:  json.RawMessage(`{"type":"object","additionalProperties":false,"required":["query"],"properties":{"query":{"type":"string"}}}`),
+		},
+	}
+	tools, err := translateTools(specs)
+	if err != nil {
+		t.Fatalf("translateTools returned error: %v", err)
+	}
+	if len(tools) != 1 {
+		t.Fatalf("len(tools) = %d, want 1", len(tools))
+	}
+	fn := tools[0].Function
+	if fn.Name != "find_accounts" {
+		t.Fatalf("name = %q, want find_accounts", fn.Name)
+	}
+	if fn.Description.Value != "look up account codes" {
+		t.Fatalf("description = %q, want the spec description", fn.Description.Value)
+	}
+	if fn.Parameters["type"] != "object" {
+		t.Fatalf("parameters.type = %v, want object", fn.Parameters["type"])
+	}
+	if !fn.Strict.Value {
+		t.Fatal("Strict should be set to true when ArgsSchema is provided")
+	}
+}
+
+func TestTranslateToolsRejectsBadSchema(t *testing.T) {
+	_, err := translateTools([]llm.ToolSpec{{
+		Name:       "broken",
+		ArgsSchema: json.RawMessage(`{not-json`),
+	}})
+	if err == nil {
+		t.Fatal("expected error for invalid args schema")
+	}
+}
+
+func TestTranslateToolsRejectsBlankName(t *testing.T) {
+	_, err := translateTools([]llm.ToolSpec{{Name: "  "}})
+	if err == nil {
+		t.Fatal("expected error for blank tool name")
 	}
 }

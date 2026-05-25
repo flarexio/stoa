@@ -11,9 +11,9 @@ import (
 	"github.com/flarexio/stoa/world/agent"
 )
 
-type fakeEngineFunc func(ctx context.Context, input llm.ReasoningInput) (llm.ReasoningResult[world.NPCIntent], error)
+type fakeEngineFunc func(ctx context.Context, input llm.ReasoningInput) (llm.ReasoningOutput[world.NPCIntent], error)
 
-func (f fakeEngineFunc) Predict(ctx context.Context, input llm.ReasoningInput) (llm.ReasoningResult[world.NPCIntent], error) {
+func (f fakeEngineFunc) Predict(ctx context.Context, input llm.ReasoningInput) (llm.ReasoningOutput[world.NPCIntent], error) {
 	return f(ctx, input)
 }
 
@@ -51,15 +51,12 @@ func tavernScenario() (world.WorldState, string) {
 
 func TestAgent_ValidActionExecution(t *testing.T) {
 	w, actorID := tavernScenario()
-	engine := fakeEngineFunc(func(_ context.Context, _ llm.ReasoningInput) (llm.ReasoningResult[world.NPCIntent], error) {
-		return llm.ReasoningResult[world.NPCIntent]{
-			Rationale: "player has low reputation; stay cautious",
-			Intent: world.NPCIntent{
-				Say:     "I don't deal with strangers without good faith.",
-				Emotion: "wary",
-				Action:  world.Action{Type: world.ActionSpeak, TargetID: "player"},
-			},
-		}, nil
+	engine := fakeEngineFunc(func(_ context.Context, _ llm.ReasoningInput) (llm.ReasoningOutput[world.NPCIntent], error) {
+		return llm.IntentOutput(world.NPCIntent{
+			Say:     "I don't deal with strangers without good faith.",
+			Emotion: "wary",
+			Action:  world.Action{Type: world.ActionSpeak, TargetID: "player"},
+		}, nil, "player has low reputation; stay cautious"), nil
 	})
 
 	agent := agent.NPC{Engine: engine, MaxTurns: 3}
@@ -79,18 +76,15 @@ func TestAgent_CorrectsAfterValidationFeedback(t *testing.T) {
 	w, actorID := tavernScenario()
 
 	calls := 0
-	engine := fakeEngineFunc(func(_ context.Context, input llm.ReasoningInput) (llm.ReasoningResult[world.NPCIntent], error) {
+	engine := fakeEngineFunc(func(_ context.Context, input llm.ReasoningInput) (llm.ReasoningOutput[world.NPCIntent], error) {
 		calls++
 		switch calls {
 		case 1:
-			return llm.ReasoningResult[world.NPCIntent]{
-				Rationale: "be generous",
-				Intent: world.NPCIntent{
-					Say:     "Here, take this sword.",
-					Emotion: "generous",
-					Action:  world.Action{Type: world.ActionGive, TargetID: "player", ItemID: "magic_sword"},
-				},
-			}, nil
+			return llm.IntentOutput(world.NPCIntent{
+				Say:     "Here, take this sword.",
+				Emotion: "generous",
+				Action:  world.Action{Type: world.ActionGive, TargetID: "player", ItemID: "magic_sword"},
+			}, nil, "be generous"), nil
 		default:
 			sawValidationErr := false
 			for _, e := range input.Events {
@@ -101,14 +95,11 @@ func TestAgent_CorrectsAfterValidationFeedback(t *testing.T) {
 			if !sawValidationErr {
 				t.Errorf("expected validation_error event on retry, got events %+v", input.Events)
 			}
-			return llm.ReasoningResult[world.NPCIntent]{
-				Rationale: "corrected: I can only give what I own",
-				Intent: world.NPCIntent{
-					Say:     "I can only offer what I carry.",
-					Emotion: "cautious",
-					Action:  world.Action{Type: world.ActionSpeak, TargetID: "player"},
-				},
-			}, nil
+			return llm.IntentOutput(world.NPCIntent{
+				Say:     "I can only offer what I carry.",
+				Emotion: "cautious",
+				Action:  world.Action{Type: world.ActionSpeak, TargetID: "player"},
+			}, nil, "corrected: I can only give what I own"), nil
 		}
 	})
 
@@ -128,11 +119,12 @@ func TestAgent_CorrectsAfterValidationFeedback(t *testing.T) {
 func TestAgent_GivesUpAfterMaxTurns(t *testing.T) {
 	w, actorID := tavernScenario()
 	// Merchant role does not include ActionMove — always invalid.
-	engine := fakeEngineFunc(func(_ context.Context, _ llm.ReasoningInput) (llm.ReasoningResult[world.NPCIntent], error) {
-		return llm.ReasoningResult[world.NPCIntent]{
-			Rationale: "stubborn",
-			Intent:    world.NPCIntent{Action: world.Action{Type: world.ActionMove, LocationID: "north_road"}},
-		}, nil
+	engine := fakeEngineFunc(func(_ context.Context, _ llm.ReasoningInput) (llm.ReasoningOutput[world.NPCIntent], error) {
+		return llm.IntentOutput(
+			world.NPCIntent{Action: world.Action{Type: world.ActionMove, LocationID: "north_road"}},
+			nil,
+			"stubborn",
+		), nil
 	})
 
 	agent := agent.NPC{Engine: engine, MaxTurns: 2}
