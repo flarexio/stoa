@@ -2,6 +2,7 @@
 package openai
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -62,7 +63,8 @@ type Adapter[TIntent any] struct {
 	client                       openai.Client
 	model                        string
 	outputFormat                 OutputFormat
-	envelope                     any // assembled response_format schema; nil when not json_schema
+	envelope                     any    // assembled response_format schema; nil when not json_schema
+	envelopeHint                 string // system-message teaching of the envelope shape; non-empty only when the downgrade can fire
 	disableStrictSchemaWithTools bool
 	renderer                     llm.PromptRenderer
 	decoder                      llm.Decoder[TIntent]
@@ -115,6 +117,7 @@ func NewAdapter[TIntent any](cfg Config[TIntent]) (*Adapter[TIntent], error) {
 	}
 
 	var envelope any
+	var envelopeHint string
 	if outputFormat == OutputFormatJSONSchema {
 		if len(cfg.IntentSchema) == 0 {
 			return nil, errors.New("openai: OutputFormatJSONSchema requires IntentSchema")
@@ -124,6 +127,14 @@ func NewAdapter[TIntent any](cfg Config[TIntent]) (*Adapter[TIntent], error) {
 			return nil, fmt.Errorf("openai: invalid IntentSchema: %w", err)
 		}
 		envelope = built
+
+		if cfg.DisableStrictSchemaWithTools {
+			hint, err := buildEnvelopeHint(cfg.IntentSchema)
+			if err != nil {
+				return nil, fmt.Errorf("openai: build envelope hint: %w", err)
+			}
+			envelopeHint = hint
+		}
 	}
 
 	clientOpts := []option.RequestOption{option.WithAPIKey(apiKey)}
@@ -136,6 +147,7 @@ func NewAdapter[TIntent any](cfg Config[TIntent]) (*Adapter[TIntent], error) {
 		model:                        model,
 		outputFormat:                 outputFormat,
 		envelope:                     envelope,
+		envelopeHint:                 envelopeHint,
 		disableStrictSchemaWithTools: cfg.DisableStrictSchemaWithTools,
 		renderer:                     renderer,
 		decoder:                      decoder,
@@ -152,14 +164,14 @@ func (a *Adapter[TIntent]) Predict(ctx context.Context, input llm.ReasoningInput
 		return zero, err
 	}
 
-	params := openai.ChatCompletionNewParams{
-		Messages: messages,
-		Model:    openai.ChatModel(a.model),
-	}
-
 	tools, err := translateTools(input.Tools)
 	if err != nil {
 		return zero, err
+	}
+
+	params := openai.ChatCompletionNewParams{
+		Messages: a.maybeInjectEnvelopeHint(messages, len(tools) > 0),
+		Model:    openai.ChatModel(a.model),
 	}
 	if len(tools) > 0 {
 		params.Tools = tools
@@ -220,6 +232,19 @@ func (a *Adapter[TIntent]) effectiveOutputFormat(hasTools bool) OutputFormat {
 	return a.outputFormat
 }
 
+// maybeInjectEnvelopeHint prepends the envelope-shape system message when the
+// downgrade fires for this turn. Without it, the model sees only the loose
+// json_object constraint and may emit free-form text on content turns.
+func (a *Adapter[TIntent]) maybeInjectEnvelopeHint(messages []openai.ChatCompletionMessageParamUnion, hasTools bool) []openai.ChatCompletionMessageParamUnion {
+	if a.envelopeHint == "" || a.effectiveOutputFormat(hasTools) != OutputFormatJSONObject {
+		return messages
+	}
+	out := make([]openai.ChatCompletionMessageParamUnion, 0, len(messages)+1)
+	out = append(out, openai.SystemMessage(a.envelopeHint))
+	out = append(out, messages...)
+	return out
+}
+
 func (a *Adapter[TIntent]) messages(input llm.ReasoningInput) ([]openai.ChatCompletionMessageParamUnion, error) {
 	messages, err := a.renderer.Render(input)
 	if err != nil {
@@ -275,6 +300,29 @@ func translateTools(specs []llm.ToolSpec) ([]openai.ChatCompletionToolParam, err
 		tools = append(tools, openai.ChatCompletionToolParam{Function: fn})
 	}
 	return tools, nil
+}
+
+// buildEnvelopeHint composes a system message that teaches the envelope shape
+// for content turns when sampler-strict json_schema is dropped. It embeds the
+// caller's intent schema verbatim so the model has the full contract.
+func buildEnvelopeHint(intentSchema json.RawMessage) (string, error) {
+	var pretty bytes.Buffer
+	if err := json.Indent(&pretty, []byte(intentSchema), "", "  "); err != nil {
+		return "", err
+	}
+	return fmt.Sprintf(`When you respond with content instead of a tool call, output ONE JSON object matching this exact shape:
+
+{
+  "evidence": [{"source": "string", "fact": "string"}],
+  "rationale": "string",
+  "intent": <object matching the schema below>
+}
+
+The "intent" field must conform to this JSON Schema:
+
+%s
+
+Output ONLY the JSON object. No prose, no markdown fences, no surrounding text.`, pretty.String()), nil
 }
 
 // buildEnvelopeSchema wraps the caller-supplied intent schema in the canonical
