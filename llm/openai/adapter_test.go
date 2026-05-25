@@ -5,8 +5,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/openai/openai-go"
-
 	"github.com/flarexio/stoa/llm"
 )
 
@@ -93,7 +91,7 @@ func TestMessagesMapEnvironmentFeedbackToUserContext(t *testing.T) {
 				Content: "amount must be positive",
 			},
 		},
-	})
+	}, "")
 	if err != nil {
 		t.Fatalf("messages returned error: %v", err)
 	}
@@ -348,7 +346,7 @@ func TestNewAdapterNoEnvelopeHintWithoutFlag(t *testing.T) {
 	}
 }
 
-func TestMaybeInjectEnvelopeHintInjectsOnDowngradeTurn(t *testing.T) {
+func TestHintForReturnsHintOnlyOnDowngradeTurn(t *testing.T) {
 	t.Setenv("OPENAI_API_KEY", "test-key")
 
 	adapter, err := NewAdapter(Config[testIntent]{
@@ -360,27 +358,15 @@ func TestMaybeInjectEnvelopeHintInjectsOnDowngradeTurn(t *testing.T) {
 		t.Fatalf("NewAdapter returned error: %v", err)
 	}
 
-	base := []openai.ChatCompletionMessageParamUnion{openai.UserMessage("hi")}
-
-	got := adapter.maybeInjectEnvelopeHint(base, true)
-	if len(got) != len(base)+1 {
-		t.Fatalf("hasTools=true: got %d messages, want %d (hint prepended)", len(got), len(base)+1)
+	if hint := adapter.hintFor(true); hint == "" {
+		t.Fatal("hintFor(hasTools=true) should return the envelope hint")
 	}
-	encoded, _ := json.Marshal(got[0])
-	if !strings.Contains(string(encoded), `"role":"system"`) {
-		t.Fatalf("first message should be system, got %s", encoded)
-	}
-	if !strings.Contains(string(encoded), "evidence") {
-		t.Fatalf("system message should be the envelope hint, got %s", encoded)
-	}
-
-	got = adapter.maybeInjectEnvelopeHint(base, false)
-	if len(got) != len(base) {
-		t.Fatalf("hasTools=false: got %d messages, want %d (no injection — strict schema still fires)", len(got), len(base))
+	if hint := adapter.hintFor(false); hint != "" {
+		t.Fatalf("hintFor(hasTools=false) should be empty (strict schema still fires), got:\n%s", hint)
 	}
 }
 
-func TestMaybeInjectEnvelopeHintNoopWithoutFlag(t *testing.T) {
+func TestHintForEmptyWithoutFlag(t *testing.T) {
 	t.Setenv("OPENAI_API_KEY", "test-key")
 
 	adapter, err := NewAdapter(Config[testIntent]{
@@ -391,10 +377,80 @@ func TestMaybeInjectEnvelopeHintNoopWithoutFlag(t *testing.T) {
 		t.Fatalf("NewAdapter returned error: %v", err)
 	}
 
-	base := []openai.ChatCompletionMessageParamUnion{openai.UserMessage("hi")}
-	got := adapter.maybeInjectEnvelopeHint(base, true)
-	if len(got) != len(base) {
-		t.Fatalf("flag off: hint must not inject, got %d messages, want %d", len(got), len(base))
+	if hint := adapter.hintFor(true); hint != "" {
+		t.Fatalf("flag off: hintFor must be empty, got:\n%s", hint)
+	}
+}
+
+func TestMergeEnvelopeHintFoldsIntoExistingSystem(t *testing.T) {
+	in := []llm.Message{
+		{Role: llm.MessageRoleSystem, Content: "you are a reasoning engine"},
+		{Role: llm.MessageRoleUser, Content: "task body"},
+	}
+	out := mergeEnvelopeHint(in, "envelope shape teaching")
+
+	if len(out) != len(in) {
+		t.Fatalf("len(out) = %d, want %d (merge, not insert)", len(out), len(in))
+	}
+	systems := 0
+	for _, m := range out {
+		if m.Role == llm.MessageRoleSystem {
+			systems++
+		}
+	}
+	if systems != 1 {
+		t.Fatalf("got %d system messages, want exactly 1 (Qwen templates reject multiple)", systems)
+	}
+	if !strings.Contains(out[0].Content, "you are a reasoning engine") {
+		t.Fatalf("original system body lost: %s", out[0].Content)
+	}
+	if !strings.Contains(out[0].Content, "envelope shape teaching") {
+		t.Fatalf("hint not appended: %s", out[0].Content)
+	}
+}
+
+func TestMergeEnvelopeHintPrependsWhenNoSystem(t *testing.T) {
+	in := []llm.Message{
+		{Role: llm.MessageRoleUser, Content: "task body"},
+	}
+	out := mergeEnvelopeHint(in, "hint")
+
+	if len(out) != len(in)+1 {
+		t.Fatalf("len(out) = %d, want %d (prepended)", len(out), len(in)+1)
+	}
+	if out[0].Role != llm.MessageRoleSystem || out[0].Content != "hint" {
+		t.Fatalf("first message = %+v, want a system message carrying just the hint", out[0])
+	}
+}
+
+func TestMessagesEmitOneSystemMessageOnDowngradeTurn(t *testing.T) {
+	t.Setenv("OPENAI_API_KEY", "test-key")
+
+	adapter, err := NewAdapter(Config[testIntent]{
+		Model:                        "gpt-5.4-mini",
+		IntentSchema:                 json.RawMessage(`{"type":"object","additionalProperties":false,"required":["action"],"properties":{"action":{"type":"string"}}}`),
+		DisableStrictSchemaWithTools: true,
+		Renderer:                     llm.DefaultPromptRenderer{SystemPrompt: "you are a reasoning engine"},
+	})
+	if err != nil {
+		t.Fatalf("NewAdapter returned error: %v", err)
+	}
+
+	messages, err := adapter.messages(llm.ReasoningInput{Task: "task body"}, adapter.hintFor(true))
+	if err != nil {
+		t.Fatalf("messages returned error: %v", err)
+	}
+
+	raw, _ := json.Marshal(messages)
+	encoded := string(raw)
+	if got := strings.Count(encoded, `"role":"system"`); got != 1 {
+		t.Fatalf("downgrade turn produced %d system messages, want exactly 1 (Qwen-style templates reject multiple):\n%s", got, encoded)
+	}
+	if !strings.Contains(encoded, "you are a reasoning engine") {
+		t.Fatalf("renderer's system content lost:\n%s", encoded)
+	}
+	if !strings.Contains(encoded, "evidence") {
+		t.Fatalf("envelope hint missing:\n%s", encoded)
 	}
 }
 
