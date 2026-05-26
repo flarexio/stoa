@@ -112,7 +112,7 @@ Stoa 目前的主要方向，是證明一個由大型語言模型驅動的 NPC�
 → 驗證錯誤以具型別事件回饋給下一輪推理
 ```
 
-`world/` 套件擁有遊戲實體與規則（不依賴 LLM）。`world/agent/` 套件擁有代理迴圈。`llm/openai/` 是可替換的供應商轉接器。
+`world/` 套件擁有遊戲實體與規則（不依賴 LLM）。`world/agent/` 套件擁有代理迴圈。供應商轉接器放在 `llm/<provider>/`（目前有 `openai` 與 `anthropic`），可互換。
 
 `testdata/scenarios/tavern.json` 是參考酒館場景：謹慎的商人 Mira 持有治療藥水；玩家對她聲望不佳；北邊的路上有強盜。
 
@@ -148,7 +148,8 @@ stoa/
 ├── harness/
 │   └── loop/              # 具型別的推理、驗證、執行 runner
 ├── llm/                   # 共用推理合約與提示詞渲染
-│   └── openai/            # OpenAI 供應商轉接器
+│   ├── openai/            # OpenAI 供應商轉接器
+│   └── anthropic/         # Anthropic 供應商轉接器
 ├── testdata/
 │   └── scenarios/         # NPC 場景樣本（例如 tavern.json）
 └── docs/

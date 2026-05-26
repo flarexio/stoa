@@ -64,14 +64,14 @@ stoa/
     retry/              # (reserved) retry and circuit-breaker mechanics
     handoff/            # (reserved) shared handoff envelopes
   llm/                  # Reasoning engine and message contracts
-  llm/<provider>/       # Provider adapters (e.g. llm/openai)
+  llm/<provider>/       # Provider adapters (e.g. llm/openai, llm/anthropic)
   cmd/                  # Executable entry points
     stoa/               #   Demo CLI: npc-run subcommand
   testdata/             # Scenario fixtures
   docs/
 ```
 
-Example: `world/` defines the game domain -- actors, items, locations, NPC intents, and the validator. `world/agent/` drives one harness loop over `world.NPCIntent`, renders the NPC prompt, and feeds validation or execution errors back as typed events. The OpenAI wiring happens at the composition edge, where the prompt renderer is passed into `llm/openai`. `world/` imports neither `world/agent/` nor `llm/`.
+Example: `world/` defines the game domain -- actors, items, locations, NPC intents, and the validator. `world/agent/` drives one harness loop over `world.NPCIntent`, renders the NPC prompt, and feeds validation or execution errors back as typed events. The provider wiring happens at the composition edge, where the prompt renderer is passed into `llm/openai`, `llm/anthropic`, or any other adapter. `world/` imports neither `world/agent/` nor `llm/`.
 
 Outbound adapters -- HTTP clients, persistence implementations, message-bus transports, anything that pulls in an external SDK or network dependency -- do not live under the domain package. They belong in peer infrastructure trees or at the composition edge, each adapter importing the domain it implements but never being imported by it. The domain remains stdlib-only.
 
@@ -155,11 +155,11 @@ func (i Intent) Validate() error {
 }
 ```
 
-## OpenAI Adapter Configuration
+## Provider Adapter Configuration
 
-The `llm/openai` adapter accepts provider connection settings through its `Config` struct. Explicit config values take precedence over environment variables, so a Stoa application can carry its own LLM settings without colliding with other services on the same host.
+Each adapter under `llm/<provider>/` accepts connection settings through its own `Config` struct. Explicit config values take precedence over environment variables, so a Stoa application can carry its own LLM settings without colliding with other services on the same host.
 
-### Default OpenAI
+### OpenAI
 
 ```go
 import "github.com/flarexio/stoa/llm/openai"
@@ -170,19 +170,20 @@ engine, err := openai.NewAdapter(openai.Config[MyIntent]{
 })
 ```
 
-When `APIKey` is empty, the constructor falls back to `$OPENAI_API_KEY`.
+When `APIKey` is empty, the constructor falls back to `$OPENAI_API_KEY`; when `BaseURL` is empty, it falls back to `$OPENAI_BASE_URL`. Point `BaseURL` at any OpenAI-compatible endpoint (Ollama, vLLM, LiteLLM, etc.).
 
-### OpenAI-compatible provider with custom base URL
+### Anthropic
 
 ```go
-engine, err := openai.NewAdapter(openai.Config[MyIntent]{
-    APIKey:  "sk-...",
-    BaseURL: "https://api.openai.com/v1",
-    Model:   "gpt-5.4-mini",
+import "github.com/flarexio/stoa/llm/anthropic"
+
+engine, err := anthropic.NewAdapter(anthropic.Config[MyIntent]{
+    APIKey: os.Getenv("ANTHROPIC_API_KEY"),
+    Model:  "claude-opus-4-7",
 })
 ```
 
-When `BaseURL` is empty, the constructor falls back to `$OPENAI_BASE_URL`. Set it to point at any OpenAI-compatible endpoint (Ollama, vLLM, LiteLLM, etc.).
+`APIKey` falls back to `$ANTHROPIC_API_KEY` and `BaseURL` to `$ANTHROPIC_BASE_URL`. `MaxTokens` defaults to 4096 (the Messages API requires it); override it on `Config` when a feature needs a different cap.
 
 ### API key injection without environment variables
 
@@ -236,9 +237,9 @@ type EvidenceRef struct {
 
 `Rationale` should be concise and auditable. It is not a place to depend on hidden chain-of-thought. The contract should capture what a validator, test, or human reviewer can inspect.
 
-Tools are registered on the harness `Runner.Tools` map. On each turn the loop forwards their `ToolSpec`s as `ReasoningInput.Tools`; the OpenAI adapter then translates them into the SDK's native `tools` parameter and reads `message.tool_calls` from the response. The model picks one of the two terminal shapes per turn; the loop runs the requested tools (when `Kind == ReasoningToolCalls`) and feeds their results back as `EventToolResult` events before the next turn.
+Tools are registered on the harness `Runner.Tools` map. On each turn the loop forwards their `ToolSpec`s as `ReasoningInput.Tools`; each provider adapter then translates them into the SDK's native tool definitions and reads the model's tool-use blocks (`message.tool_calls` for OpenAI, `tool_use` content blocks for Anthropic) from the response. The model picks one of the two terminal shapes per turn; the loop runs the requested tools (when `Kind == ReasoningToolCalls`) and feeds their results back as `EventToolResult` events before the next turn.
 
-`llm/openai` also supports `json_schema` structured outputs: pass `Config.IntentSchema` and the adapter wraps it in the canonical `{evidence, rationale, intent}` envelope and requests strict structured output, so the model cannot produce malformed envelopes or two concatenated objects. Without `IntentSchema`, the adapter falls back to `json_object` for back-compatibility.
+Both adapters support provider-native strict structured outputs. Pass `Config.IntentSchema` and the adapter wraps it in the canonical `{evidence, rationale, intent}` envelope: `llm/openai` requests it via `response_format: json_schema` (strict), and `llm/anthropic` via `output_config.format: json_schema`. Without `IntentSchema`, OpenAI falls back to `json_object` for back-compatibility and Anthropic returns plain text that the configured `Decoder` parses.
 
 ## Cycle Events
 

@@ -116,7 +116,7 @@ world situation
 → validation errors feed back as typed events for correction
 ```
 
-The `world/` package owns game entities and rules (no LLM dependency). The `world/agent/` package owns the agent loop. Provider adapters live in `llm/openai/` and are swappable.
+The `world/` package owns game entities and rules (no LLM dependency). The `world/agent/` package owns the agent loop. Provider adapters live in `llm/<provider>/` (currently `openai` and `anthropic`) and are swappable.
 
 A tavern scenario ships in `testdata/scenarios/tavern.json`: Mira is a cautious merchant who owns healing potions; the player has low reputation; north road has bandits. The NPC tests use an equivalent in-code fixture; the JSON file is the reference shape for future demos and loaders.
 
@@ -152,7 +152,8 @@ stoa/
 ├── harness/
 │   └── loop/              # Typed reason-validate-execute runner
 ├── llm/                   # Shared reasoning contracts and prompt rendering
-│   └── openai/            # OpenAI provider adapter
+│   ├── openai/            # OpenAI provider adapter
+│   └── anthropic/         # Anthropic provider adapter
 ├── testdata/
 │   └── scenarios/         # NPC scenario fixtures (e.g. tavern.json)
 └── docs/
