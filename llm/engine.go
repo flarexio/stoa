@@ -9,8 +9,9 @@ import (
 type EngineKind string
 
 const (
-	EngineScripted EngineKind = "scripted"
-	EngineOpenAI   EngineKind = "openai"
+	EngineScripted  EngineKind = "scripted"
+	EngineOpenAI    EngineKind = "openai"
+	EngineAnthropic EngineKind = "anthropic"
 )
 
 // ReasoningEngine is the port use cases call to ask a model for a typed Intent.
