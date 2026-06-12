@@ -542,3 +542,110 @@ func TestRunnerUnknownToolFeedsBackAndContinues(t *testing.T) {
 		t.Error("unknown tool should feed back a 'not available' tool_result event")
 	}
 }
+
+// multiIntent implements TerminalIntent, so a Runner[multiIntent] is multi-action.
+type multiIntent struct {
+	Action string
+}
+
+func (i multiIntent) IsTerminal() bool { return i.Action == "done" }
+
+type multiEngine struct {
+	results []llm.ReasoningOutput[multiIntent]
+}
+
+func (e *multiEngine) Predict(context.Context, llm.ReasoningInput) (llm.ReasoningOutput[multiIntent], error) {
+	if len(e.results) == 0 {
+		return llm.ReasoningOutput[multiIntent]{}, errors.New("no result")
+	}
+	result := e.results[0]
+	e.results = e.results[1:]
+	return result, nil
+}
+
+func multiOutput(action string) llm.ReasoningOutput[multiIntent] {
+	return llm.IntentOutput(multiIntent{Action: action}, nil, action)
+}
+
+func multiRunner(engine *multiEngine, maxTurns int, executed *[]string) Runner[multiIntent] {
+	return Runner[multiIntent]{
+		Engine:    engine,
+		Validator: ValidatorFunc[multiIntent](func(context.Context, multiIntent) error { return nil }),
+		Executor: ExecutorFunc[multiIntent](func(_ context.Context, intent multiIntent) (llm.Observation, error) {
+			if executed != nil {
+				*executed = append(*executed, intent.Action)
+			}
+			return llm.Observation{Summary: "did " + intent.Action}, nil
+		}),
+		MaxTurns: maxTurns,
+	}
+}
+
+func TestRunnerMultiActionRunsUntilTerminal(t *testing.T) {
+	engine := &multiEngine{results: []llm.ReasoningOutput[multiIntent]{
+		multiOutput("reverse"), multiOutput("post"), multiOutput("done"),
+	}}
+	var executed []string
+
+	result, err := multiRunner(engine, 5, &executed).Run(context.Background(), llm.ReasoningInput{Task: "reverse and re-post"})
+	if err != nil {
+		t.Fatalf("Run returned error: %v", err)
+	}
+	if got := strings.Join(executed, ","); got != "reverse,post" {
+		t.Fatalf("executed = %q, want reverse,post (terminal 'done' must not execute)", got)
+	}
+	if len(result.Steps) != 2 {
+		t.Fatalf("steps = %d, want 2", len(result.Steps))
+	}
+	if result.Observation.Summary != "did post" {
+		t.Fatalf("result.Observation = %q, want last action's 'did post'", result.Observation.Summary)
+	}
+	if result.Reasoning.Intent.Action != "done" {
+		t.Fatalf("result.Reasoning action = %q, want the terminal done", result.Reasoning.Intent.Action)
+	}
+}
+
+func TestRunnerMultiActionMaxTurnsIsPartial(t *testing.T) {
+	engine := &multiEngine{results: []llm.ReasoningOutput[multiIntent]{
+		multiOutput("reverse"), multiOutput("post"), // no terminal before MaxTurns
+	}}
+
+	result, err := multiRunner(engine, 2, nil).Run(context.Background(), llm.ReasoningInput{Task: "x"})
+	if !errors.Is(err, ErrMaxTurnsExceeded) {
+		t.Fatalf("err = %v, want ErrMaxTurnsExceeded", err)
+	}
+	if len(result.Steps) != 2 {
+		t.Fatalf("steps = %d, want 2 (partial progress surfaced on MaxTurns)", len(result.Steps))
+	}
+	if result.Observation.Summary != "did post" {
+		t.Fatalf("result.Observation = %q, want the last completed step", result.Observation.Summary)
+	}
+}
+
+func TestRunnerSingleActionStopsAfterFirstIntent(t *testing.T) {
+	engine := &fakeEngine{
+		results: []llm.ReasoningOutput[testIntent]{
+			intentOutput("first", "do this"),
+			intentOutput("second", "should never run in single-action mode"),
+		},
+	}
+
+	runner := Runner[testIntent]{
+		Engine:    engine,
+		Validator: ValidatorFunc[testIntent](func(_ context.Context, _ testIntent) error { return nil }),
+		Executor: ExecutorFunc[testIntent](func(_ context.Context, _ testIntent) (llm.Observation, error) {
+			return llm.Observation{Summary: "done"}, nil
+		}),
+	}
+
+	result, err := runner.Run(context.Background(), llm.ReasoningInput{Task: "x"})
+	if err != nil {
+		t.Fatalf("Run returned error: %v", err)
+	}
+	if result.Turns != 1 || len(result.Steps) != 1 {
+		t.Fatalf("turns=%d steps=%d, want 1/1", result.Turns, len(result.Steps))
+	}
+	if len(engine.results) != 1 {
+		t.Fatalf("second intent must not run: %d results left, want 1", len(engine.results))
+	}
+}

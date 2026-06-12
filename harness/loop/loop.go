@@ -44,6 +44,19 @@ func (f ExecutorFunc[TIntent]) Execute(ctx context.Context, intent TIntent) (llm
 	return f(ctx, intent)
 }
 
+// TerminalIntent makes a Run multi-action: when the intent type implements it,
+// the loop runs intents until the model proposes one whose IsTerminal is true,
+// which ends the run without being executed. Types that don't implement it run
+// single-action (return after the first executed intent).
+type TerminalIntent interface {
+	IsTerminal() bool
+}
+
+func isTerminal[TIntent any](intent TIntent) bool {
+	t, ok := any(intent).(TerminalIntent)
+	return ok && t.IsTerminal()
+}
+
 // ToolHandler answers one tool call: it decodes args (the raw JSON the model
 // supplied) into its own typed parameters and returns a result string for the
 // model's next turn.
@@ -79,12 +92,20 @@ type Runner[TIntent any] struct {
 // FeedbackFormatter formats a validation/execution error into prompt feedback.
 type FeedbackFormatter func(error) string
 
-// Result is the outcome of one Run.
+// Result is the outcome of one Run. Steps holds each executed intent in order;
+// Reasoning and Observation mirror the last one.
 type Result[TIntent any] struct {
 	Reasoning   llm.ReasoningOutput[TIntent]
 	Observation llm.Observation
 	Events      []llm.CycleEvent
 	Turns       int
+	Steps       []Step[TIntent]
+}
+
+// Step is one executed intent and the observation it produced.
+type Step[TIntent any] struct {
+	Reasoning   llm.ReasoningOutput[TIntent]
+	Observation llm.Observation
 }
 
 func (r Runner[TIntent]) Run(ctx context.Context, input llm.ReasoningInput) (Result[TIntent], error) {
@@ -100,6 +121,9 @@ func (r Runner[TIntent]) Run(ctx context.Context, input llm.ReasoningInput) (Res
 
 	specs := r.toolSpecs()
 	events := append([]llm.CycleEvent(nil), input.Events...)
+	var steps []Step[TIntent]
+	var zero TIntent
+	_, multiAction := any(zero).(TerminalIntent) // intents that can signal completion run multi-action
 	for turn := 1; turn <= maxTurns; turn++ {
 		cycleInput := input
 		cycleInput.Events = append([]llm.CycleEvent(nil), events...)
@@ -138,6 +162,16 @@ func (r Runner[TIntent]) Run(ctx context.Context, input llm.ReasoningInput) (Res
 			return result, fmt.Errorf("loop: unknown reasoning kind %q", reasoning.Kind)
 		}
 
+		if isTerminal(reasoning.Intent) {
+			return Result[TIntent]{
+				Reasoning:   reasoning,
+				Observation: lastObservation(steps),
+				Events:      events,
+				Turns:       turn,
+				Steps:       steps,
+			}, nil
+		}
+
 		if err := r.Validator.Validate(ctx, reasoning.Intent); err != nil {
 			ve := validationErrorEvent(err, r.validationFormatter())
 			events = append(events, ve)
@@ -169,17 +203,34 @@ func (r Runner[TIntent]) Run(ctx context.Context, input llm.ReasoningInput) (Res
 			return result, fmt.Errorf("loop: event sink (observation): %w", emitErr)
 		}
 
-		return Result[TIntent]{
-			Reasoning:   reasoning,
-			Observation: observation,
-			Events:      events,
-			Turns:       turn,
-		}, nil
+		steps = append(steps, Step[TIntent]{Reasoning: reasoning, Observation: observation})
+		if !multiAction {
+			return Result[TIntent]{
+				Reasoning:   reasoning,
+				Observation: observation,
+				Events:      events,
+				Turns:       turn,
+				Steps:       steps,
+			}, nil
+		}
 	}
 
+	// MaxTurns can be partial completion in multi-action mode; report what ran.
 	result.Events = events
 	result.Turns = maxTurns
+	result.Steps = steps
+	if n := len(steps); n > 0 {
+		result.Reasoning = steps[n-1].Reasoning
+		result.Observation = steps[n-1].Observation
+	}
 	return result, ErrMaxTurnsExceeded
+}
+
+func lastObservation[TIntent any](steps []Step[TIntent]) llm.Observation {
+	if n := len(steps); n > 0 {
+		return steps[n-1].Observation
+	}
+	return llm.Observation{}
 }
 
 func (r Runner[TIntent]) emit(ctx context.Context, event llm.CycleEvent) error {
