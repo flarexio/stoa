@@ -543,12 +543,13 @@ func TestRunnerUnknownToolFeedsBackAndContinues(t *testing.T) {
 	}
 }
 
-// multiIntent implements TerminalIntent, so a Runner[multiIntent] is multi-action.
+// multiIntent implements FinalIntent, so a Runner[multiIntent] is multi-action.
 type multiIntent struct {
 	Action string
+	Final  bool
 }
 
-func (i multiIntent) IsTerminal() bool { return i.Action == "done" }
+func (i multiIntent) IsFinal() bool { return i.Final }
 
 type multiEngine struct {
 	results []llm.ReasoningOutput[multiIntent]
@@ -563,8 +564,8 @@ func (e *multiEngine) Predict(context.Context, llm.ReasoningInput) (llm.Reasonin
 	return result, nil
 }
 
-func multiOutput(action string) llm.ReasoningOutput[multiIntent] {
-	return llm.IntentOutput(multiIntent{Action: action}, nil, action)
+func multiOutput(action string, final bool) llm.ReasoningOutput[multiIntent] {
+	return llm.IntentOutput(multiIntent{Action: action, Final: final}, nil, action)
 }
 
 func multiRunner(engine *multiEngine, maxTurns int, executed *[]string) Runner[multiIntent] {
@@ -581,9 +582,9 @@ func multiRunner(engine *multiEngine, maxTurns int, executed *[]string) Runner[m
 	}
 }
 
-func TestRunnerMultiActionRunsUntilTerminal(t *testing.T) {
+func TestRunnerMultiActionRunsUntilFinal(t *testing.T) {
 	engine := &multiEngine{results: []llm.ReasoningOutput[multiIntent]{
-		multiOutput("reverse"), multiOutput("post"), multiOutput("done"),
+		multiOutput("reverse", false), multiOutput("post", true),
 	}}
 	var executed []string
 
@@ -592,22 +593,22 @@ func TestRunnerMultiActionRunsUntilTerminal(t *testing.T) {
 		t.Fatalf("Run returned error: %v", err)
 	}
 	if got := strings.Join(executed, ","); got != "reverse,post" {
-		t.Fatalf("executed = %q, want reverse,post (terminal 'done' must not execute)", got)
+		t.Fatalf("executed = %q, want reverse,post (the final action runs, then the loop stops)", got)
 	}
 	if len(result.Steps) != 2 {
 		t.Fatalf("steps = %d, want 2", len(result.Steps))
 	}
 	if result.Observation.Summary != "did post" {
-		t.Fatalf("result.Observation = %q, want last action's 'did post'", result.Observation.Summary)
+		t.Fatalf("result.Observation = %q, want the final action's 'did post'", result.Observation.Summary)
 	}
-	if result.Reasoning.Intent.Action != "done" {
-		t.Fatalf("result.Reasoning action = %q, want the terminal done", result.Reasoning.Intent.Action)
+	if !result.Reasoning.Intent.Final {
+		t.Fatalf("result.Reasoning should be the final action")
 	}
 }
 
 func TestRunnerMultiActionMaxTurnsIsPartial(t *testing.T) {
 	engine := &multiEngine{results: []llm.ReasoningOutput[multiIntent]{
-		multiOutput("reverse"), multiOutput("post"), // no terminal before MaxTurns
+		multiOutput("reverse", false), multiOutput("post", false), // never marks final
 	}}
 
 	result, err := multiRunner(engine, 2, nil).Run(context.Background(), llm.ReasoningInput{Task: "x"})

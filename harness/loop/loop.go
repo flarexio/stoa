@@ -44,17 +44,18 @@ func (f ExecutorFunc[TIntent]) Execute(ctx context.Context, intent TIntent) (llm
 	return f(ctx, intent)
 }
 
-// TerminalIntent makes a Run multi-action: when the intent type implements it,
-// the loop runs intents until the model proposes one whose IsTerminal is true,
-// which ends the run without being executed. Types that don't implement it run
-// single-action (return after the first executed intent).
-type TerminalIntent interface {
-	IsTerminal() bool
+// FinalIntent makes a Run multi-action: when the intent type implements it, the
+// loop keeps executing intents until one whose IsFinal is true — the model's
+// "this is my last action" marker — which is executed and then ends the run.
+// Types that don't implement it run single-action (return after the first
+// executed intent).
+type FinalIntent interface {
+	IsFinal() bool
 }
 
-func isTerminal[TIntent any](intent TIntent) bool {
-	t, ok := any(intent).(TerminalIntent)
-	return ok && t.IsTerminal()
+func isFinal[TIntent any](intent TIntent) bool {
+	t, ok := any(intent).(FinalIntent)
+	return ok && t.IsFinal()
 }
 
 // ToolHandler answers one tool call: it decodes args (the raw JSON the model
@@ -123,7 +124,7 @@ func (r Runner[TIntent]) Run(ctx context.Context, input llm.ReasoningInput) (Res
 	events := append([]llm.CycleEvent(nil), input.Events...)
 	var steps []Step[TIntent]
 	var zero TIntent
-	_, multiAction := any(zero).(TerminalIntent) // intents that can signal completion run multi-action
+	_, multiAction := any(zero).(FinalIntent) // intents that can mark a final action run multi-action
 	for turn := 1; turn <= maxTurns; turn++ {
 		cycleInput := input
 		cycleInput.Events = append([]llm.CycleEvent(nil), events...)
@@ -162,16 +163,6 @@ func (r Runner[TIntent]) Run(ctx context.Context, input llm.ReasoningInput) (Res
 			return result, fmt.Errorf("loop: unknown reasoning kind %q", reasoning.Kind)
 		}
 
-		if isTerminal(reasoning.Intent) {
-			return Result[TIntent]{
-				Reasoning:   reasoning,
-				Observation: lastObservation(steps),
-				Events:      events,
-				Turns:       turn,
-				Steps:       steps,
-			}, nil
-		}
-
 		if err := r.Validator.Validate(ctx, reasoning.Intent); err != nil {
 			ve := validationErrorEvent(err, r.validationFormatter())
 			events = append(events, ve)
@@ -204,7 +195,9 @@ func (r Runner[TIntent]) Run(ctx context.Context, input llm.ReasoningInput) (Res
 		}
 
 		steps = append(steps, Step[TIntent]{Reasoning: reasoning, Observation: observation})
-		if !multiAction {
+		// Single-action stops after the first intent; multi-action stops once the
+		// model marks an executed intent as final.
+		if !multiAction || isFinal(reasoning.Intent) {
 			return Result[TIntent]{
 				Reasoning:   reasoning,
 				Observation: observation,
@@ -224,13 +217,6 @@ func (r Runner[TIntent]) Run(ctx context.Context, input llm.ReasoningInput) (Res
 		result.Observation = steps[n-1].Observation
 	}
 	return result, ErrMaxTurnsExceeded
-}
-
-func lastObservation[TIntent any](steps []Step[TIntent]) llm.Observation {
-	if n := len(steps); n > 0 {
-		return steps[n-1].Observation
-	}
-	return llm.Observation{}
 }
 
 func (r Runner[TIntent]) emit(ctx context.Context, event llm.CycleEvent) error {
